@@ -1,15 +1,14 @@
 import random
 import array
+from typing import Sequence
 
-from . import Indexable
 
-
-class shuffle(Indexable):
+class shuffle(Sequence):
     """Shuffle the elements of an array (lazily)."""
     # TODO: add support for fixed seed
-    def __init__(self, samples):
-        self.samples = samples
-        self.order = random.shuffle(list(range(len(samples))))
+    def __init__(self, sequence: Sequence):
+        self.samples = sequence
+        self.order = random.shuffle(list(range(len(sequence))))
 
     def __len__(self):
         return len(self.order)
@@ -18,9 +17,9 @@ class shuffle(Indexable):
         return self.samples[self.order[i]]
 
 
-class subset(Indexable):
+class subset(Sequence):
     """Wrap an array to show only a subset of its elements."""
-    def __init__(self, sample, indexes):
+    def __init__(self, sample: Sequence, indexes: Sequence[int]):
         if not isinstance(sample, subset):
             self.sample = sample
             self.indexes = indexes
@@ -50,7 +49,7 @@ class subset(Indexable):
         return subset(self, item)
 
 
-class rzip(Indexable):
+class rzip(Sequence):
     def __init__(self, *samples):
         self.len = min(len(s) for s in samples)
         self.samples = samples
@@ -65,7 +64,7 @@ class rzip(Indexable):
             return tuple(s[item] for s in self.samples)
 
 
-class repeat(Indexable):
+class repeat(Sequence):
     def __init__(self, value, n):
         self.value = value
         self.len = n
