@@ -1,3 +1,6 @@
+[![build status](https://api.travis-ci.org/pixelou/LazyProc.svg?branch=master)](https://travis-ci.org/pixelou/LazyProc)
+[![documentation](https://readthedocs.org/projects/lazyproc/badge/?version=latest)](https://lazyproc.readthedocs.io)
+
 # LazyProc
 
 Lazy evaluation is a form of of delayed execution of a function on a value where you
