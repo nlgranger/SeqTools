@@ -1,11 +1,23 @@
-lproc package API
+API Documentation
 =================
 
-.. automodule:: lproc.mapping
-    :members:
 
-.. automodule:: lproc.serialization
-    :members:
+Mapping function
+----------------
+
+.. automodule:: lproc.mapping
+   :members:
+
+
+Utility functions
+-----------------
 
 .. automodule:: lproc.utils
-    :members:
+   :members:
+
+
+Serialization function
+----------------------
+
+.. automodule:: lproc.serialization
+   :members:

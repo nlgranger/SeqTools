@@ -1,8 +1,11 @@
+dist: trusty
+sudo: false
 language: python
 python:
+  - "3.4"
+  - "3.5"
   - "3.6"
 install:
   - pip install .
-# command to run tests
 script:
   - python setup.py nosetests
