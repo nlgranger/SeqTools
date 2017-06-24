@@ -111,7 +111,7 @@ def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
     and the generated items passed as separate arguments to f: 
     `[map(f, zip(*it)) for it in zip(sequences)]`
     """
-    return RIMapping(f, sequence)
+    return RIMapping(f, *sequence)
 
 
 def rrmap(f: Callable, *sequence: Sequence) -> Sequence:
