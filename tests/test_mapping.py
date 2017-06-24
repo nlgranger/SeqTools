@@ -1,5 +1,5 @@
 import random
-from pytest import raises
+from nose.tools import assert_raises
 from lproc import rmap, rimap, rrmap
 
 
@@ -31,7 +31,7 @@ def test_rmap_not_assignable():
     n = 100
     data = [random.random() for _ in range(n)]
     result = rmap(lambda x: x, data)
-    with raises(Exception):
+    with assert_raises(Exception):
         result[0] = 4
 
 
@@ -76,7 +76,7 @@ def test_rmap_exceptions():
 
     data = [random.random() for _ in range(n)]
     m = rmap(do, data)
-    with raises(CustomException):
+    with assert_raises(CustomException):
         _ = m[0]
 
 

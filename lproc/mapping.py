@@ -2,6 +2,9 @@ import inspect
 from typing import Sequence, Iterable, Callable, Union
 
 
+__all__ = ['rmap', 'rimap', 'rrmap']
+
+
 class MappingException(Exception):
     pass
 

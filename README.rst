@@ -2,6 +2,8 @@
    :target: https://travis-ci.org/pixelou/LazyProc
 .. image:: https://readthedocs.org/projects/lazyproc/badge
    :target: https://lazyproc.readthedocs.io
+.. image:: https://codecov.io/gh/nlgranger/LazyProc/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/nlgranger/LazyProc
 
 
 LazyProc
