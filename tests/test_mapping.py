@@ -122,6 +122,6 @@ def test_rrmap_basics():
     m = rrmap(lambda x: x + 1, data)
     for i in range(n):
         mi = m[i]
+        di = data[i]
         assert len(data[i]) == len(mi)
-        for j in range(len(mi)):
-            assert mi[j] == data[i][j] + 1
+        assert all(y == x + 1 for y, x, in zip(mi, di))

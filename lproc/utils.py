@@ -1,77 +1,52 @@
-import random
 import array
-from typing import Sequence
+from typing import Sequence, Union
+from .common import is_int_item
 
 
-class shuffle(Sequence):
-    """Shuffle the elements of an array (lazily)."""
-    # TODO: add support for fixed seed
-    def __init__(self, sequence: Sequence):
-        self.samples = sequence
-        self.order = random.shuffle(list(range(len(sequence))))
+class Subset(Sequence):
+    def __init__(self, sequence: Union[Sequence, 'Subset'],
+                 indexes: Union[Sequence[int], slice]):
+        if isinstance(sequence, Subset):  # optimize nested subsets
+            try:  # let the index type handle subindexing if possible
+                indexes = sequence.indexes[indexes]
+            except Exception:
+                indexes = [sequence.indexes[i] for i in indexes]
+            sequence = sequence.sequence
 
-    def __len__(self):
-        return len(self.order)
+        if isinstance(indexes, slice):
+            start = indexes.start or 0
+            stop = indexes.stop or len(sequence)
+            step = indexes.step or 1
+            if start < 0:
+                start = len(sequence) + start
+            if stop < 0:
+                stop = len(sequence) + stop
+            indexes = array.array('L', range(start, stop, step))
 
-    def __getitem__(self, i):
-        return self.samples[self.order[i]]
-
-
-class subset(Sequence):
-    """Wrap an array to show only a subset of its elements."""
-    def __init__(self, sample: Sequence, indexes: Sequence[int]):
-        if not isinstance(sample, subset):
-            self.sample = sample
-            self.indexes = indexes
-        else:
-            self.sample = sample.sample
-            self.indexes = sample.indexes[indexes]
+        self.sequence = sequence
+        self.indexes = indexes
 
     def __len__(self):
         return len(self.indexes)
 
     def __getitem__(self, item):
-        try:
-            len(item)
-        except TypeError:  # has not length
-            try:
-                item = int(item)  # and casts to integer
-                return self.sample[self.indexes[item]]
-            except TypeError:
-                pass
-
-        if isinstance(item, slice):
-            start = 0 if item.start is None else item.start
-            stop = len(self) if item.stop is None else item.stop
-            step = 1 if item.step is None else item.step
-            item = array.array('L', range(start, stop, step))
-
-        return subset(self, item)
-
-
-class rzip(Sequence):
-    def __init__(self, *samples):
-        self.len = min(len(s) for s in samples)
-        self.samples = samples
-
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            return rzip(s[item] for s in self.samples)
+        if is_int_item(item):
+            return self.sequence[self.indexes[item]]
         else:
-            return tuple(s[item] for s in self.samples)
+            # note: no magic here, we delegate indexing to data containers.
+            return Subset(self.sequence[item], self.indexes[item])
 
 
-class repeat(Sequence):
-    def __init__(self, value, n):
-        self.value = value
-        self.len = n
-
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, item):
-        del item
-        return self.value
+def subset(sequence, indexes):
+    """Return a view on a reindexed sequence.
+    
+    The indexes are either a sequence of integers or a slice.
+    
+    .. note::
+        
+        The returned object does not support reindexing itself, and will 
+        delegate special indexing to the underlying data. To get a subset 
+        of a subset, use nested calls to this function (composed views 
+        are flattened out automatically for optimization).
+    """
+    return Subset(sequence, indexes)

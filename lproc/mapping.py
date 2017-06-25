@@ -1,5 +1,6 @@
 import inspect
 from typing import Sequence, Iterable, Callable, Union
+from .common import is_int_item
 
 
 __all__ = ['rmap', 'rimap', 'rrmap']
@@ -23,21 +24,7 @@ class RMapping(Sequence):
         return len(self.arrays[0])
 
     def __getitem__(self, item: Union[int, Sequence[int], slice]):
-        haslen = False
-        try:
-            len(item)
-            haslen = True
-        except TypeError:
-            pass
-
-        isint = False
-        try:
-            int(item)
-            isint = True
-        except TypeError:
-            pass
-
-        if haslen or not isint:  # delegate indexing to subtype
+        if not is_int_item(item):  # delegate indexing to subtype
             return RMapping(self.f, *list(l[item] for l in self.arrays))
 
         else:
@@ -54,10 +41,6 @@ class RMapping(Sequence):
 
                 raise e from info_e
 
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
-
 
 def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     """Return lazy mapping of a sequence.
@@ -67,6 +50,10 @@ def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     If several sequences are passed, they will be zipped together and items
     from eachs will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
+
+    Only integer indexing is handled directly, other forms of indexing (slices, 
+    list of integers...) are forwarded to the :code:`sequence` argument. 
+    If this is undesirable, you may want to use :func:`lproc.subset` instead.
 
     Example:
 

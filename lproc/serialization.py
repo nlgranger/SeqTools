@@ -3,7 +3,7 @@ import os
 import tempfile
 
 import sys
-from importlib import import_module
+from importlib import import_module, reload
 import functools
 
 
@@ -44,5 +44,6 @@ class SerializableFunc:
 
             sys.path.insert(0, d)
             m = import_module("module")
+            reload(m)
             self.func = getattr(m, self.name)
             sys.path.pop(0)
