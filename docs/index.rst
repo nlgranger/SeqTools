@@ -18,6 +18,7 @@ Example:
    ...     print("computing now")
    ...     return x + 2
    ...
+   >>> a = [1, 2, 3, 4]
    >>> m = rmap(do, a)
    >>> # nothing printed because evaluation is delayed
    >>> m[0]

@@ -43,7 +43,7 @@ def subset(sequence, indexes):
     The indexes are either a sequence of integers or a slice.
 
     .. note::
-        
+
         The returned object does not support reindexing itself, and will
         delegate special indexing to the underlying data. To get a subset
         of a subset, use nested calls to this function (composed views
