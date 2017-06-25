@@ -1,5 +1,5 @@
-.. image:: https://api.travis-ci.org/pixelou/LazyProc.svg
-   :target: https://travis-ci.org/pixelou/LazyProc
+.. image:: https://api.travis-ci.org/nlgranger/LazyProc.svg
+   :target: https://travis-ci.org/nlgranger/LazyProc
 .. image:: https://readthedocs.org/projects/lazyproc/badge
    :target: https://lazyproc.readthedocs.io
 .. image:: https://codecov.io/gh/nlgranger/LazyProc/branch/master/graph/badge.svg
@@ -21,7 +21,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install git+https://github.com/pixelou/LazyProc
+   pip install git+https://github.com/nlgranger/LazyProc
 
 
 Example

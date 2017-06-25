@@ -15,8 +15,9 @@ class RMapping(Sequence):
         assert len(sequence) > 0, "at least one input sample must be provided"
         self.arrays = sequence
         self.f = f
-        self.creation_stack = [(f, l, m, c[0].strip('\n') if c is not None else '?')
-                               for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
+        self.creation_stack = [
+            (f, l, m, c[0].strip('\n') if c is not None else '?')
+            for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
 
     def __len__(self):
         return len(self.arrays[0])
@@ -43,12 +44,13 @@ class RMapping(Sequence):
             try:
                 return self.f(*(l[item] for l in self.arrays))
 
-            except Exception as e:  # gracefully report exceptions from execution
+            except Exception as e:  # gracefully report exceptions
+                info_where = "\n".join(
+                    "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
+                    for f, l, m, c in self.creation_stack)
                 info_e = MappingException(
                     "An exception occured when using the node created at: \n"
-                    + "\n".join(
-                        "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
-                        for f, l, m, c in self.creation_stack))
+                    + info_where)
 
                 raise e from info_e
 
@@ -58,22 +60,22 @@ class RMapping(Sequence):
 
 
 def rmap(f: Callable, *sequence: Sequence) -> Sequence:
-    """Return lazy mapping of a sequence. 
+    """Return lazy mapping of a sequence.
 
     Lazy version of `[f(x) for x in sequence]`.
 
-    If several sequences are passed, they will be zipped together and items from eachs 
-    will be passed as distinct arguments to f: `[f(*x) for x in zip(*sequences)]`
-    
-    Example: 
+    If several sequences are passed, they will be zipped together and items
+    from eachs will be passed as distinct arguments to f:
+    :code:`[f(*x) for x in zip(*sequences)]`
+
+    Example:
 
     >>> a = [1, 2, 3, 4]
     >>> [x + 2 for x in a]
     [3, 4, 5, 6]
     >>> m = rmap(lambda x: x + 2, a)
-    >>> [x for x in m] 
+    >>> [x for x in m]
     [3, 4, 5, 6]
-    
     >>> def do(x, y):
     ...     print("computing now")
     ...     return x + y
@@ -110,8 +112,8 @@ def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
 
     Lazy verion of `[map(f, it) for it in sequence]`.
 
-    If several arrays are passed, the iterables at a given index will be zipped together 
-    and the generated items passed as separate arguments to f: 
+    If several arrays are passed, the iterables at a given index will be zipped
+    together and the generated items passed as separate arguments to f:
     `[map(f, zip(*it)) for it in zip(sequences)]`
     """
     return RIMapping(f, *sequence)
@@ -122,8 +124,8 @@ def rrmap(f: Callable, *sequence: Sequence) -> Sequence:
 
     Lazy version of `[[f(*e) for e in zip(s)] for s in zip(sequence)]`.s
 
-    If several arrays are passed, the sequences at a given index will be zipped together 
-    and the corresponding items passed as separate arguments to f:
+    If several arrays are passed, the sequences at a given index will be zipped
+    together and the corresponding items passed as separate arguments to f:
     `[[f(*x) for x in zip(*s)] for s in sequences]`
     """
     return RMapping(lambda *l: RMapping(f, *l), *sequence)
