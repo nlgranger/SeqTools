@@ -9,13 +9,11 @@ install:
 - pip install -e .
 - pip install nose
 - pip install coverage
-- pip install pytest-cov
-- pip install pytest-travis-fold
-- pip install codecov
+- pip install codacy-coverage
 script:
-- nosetests
+- nosetests --with-coverage --cover-xml --cover-package=lproc
 after_success:
-- codecov
+- python-codacy-coverage -r coverage.xml
 deploy:
   provider: pypi
   user: nlgranger

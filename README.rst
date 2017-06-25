@@ -2,8 +2,8 @@
    :target: https://travis-ci.org/nlgranger/LazyProc
 .. image:: https://readthedocs.org/projects/lazyproc/badge
    :target: https://lazyproc.readthedocs.io
-.. image:: https://codecov.io/gh/nlgranger/LazyProc/branch/master/graph/badge.svg
-  :target: https://codecov.io/gh/nlgranger/LazyProc
+.. image:: https://api.codacy.com/project/badge/Grade/e76ddab290bb4d1689a6e27f47452bdb
+   :target: https://www.codacy.com/app/nlgranger/LazyProc?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/LazyProc&amp;utm_campaign=Badge_Grade
 
 
 LazyProc

@@ -51,8 +51,8 @@ def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     from eachs will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
 
-    Only integer indexing is handled directly, other forms of indexing (slices, 
-    list of integers...) are forwarded to the :code:`sequence` argument. 
+    Only integer indexing is handled directly, other forms of indexing (slices,
+    list of integers...) are forwarded to the :code:`sequence` argument.
     If this is undesirable, you may want to use :func:`lproc.subset` instead.
 
     Example:

@@ -39,14 +39,14 @@ class Subset(Sequence):
 
 def subset(sequence, indexes):
     """Return a view on a reindexed sequence.
-    
+
     The indexes are either a sequence of integers or a slice.
-    
+
     .. note::
         
-        The returned object does not support reindexing itself, and will 
-        delegate special indexing to the underlying data. To get a subset 
-        of a subset, use nested calls to this function (composed views 
+        The returned object does not support reindexing itself, and will
+        delegate special indexing to the underlying data. To get a subset
+        of a subset, use nested calls to this function (composed views
         are flattened out automatically for optimization).
     """
     return Subset(sequence, indexes)
