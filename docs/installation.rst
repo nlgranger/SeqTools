@@ -6,5 +6,5 @@ using:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/pixelou/LazyProc
+   pip install lproc
 

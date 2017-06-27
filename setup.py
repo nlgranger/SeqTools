@@ -9,7 +9,7 @@ setup(
     license="MPL2",
     url="https://github.com/nlgranger/LazyProc",
     packages=['lproc'],
-    version='0.1.0',
+    version='0.1.1',
     install_requires=[
         'typing;python_version<"3.6"'
     ],

@@ -23,7 +23,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install git+https://github.com/nlgranger/LazyProc
+   pip install lproc
 
 
 Example
@@ -51,3 +51,10 @@ Documentation
 -------------
 
 Head up to https://lazyproc.readthedocs.io
+
+
+Similar libraries
+-----------------
+
+- `Fuel<http://fuel.readthedocs.io/en/latest>`_ is a higher level library target toward
+  machine leraning and dataset manipulation.

@@ -12,24 +12,22 @@ Example:
 
    from lproc import rmap
 
-.. doctest::
-
-   >>> def do(x):
-   ...     print("computing now")
-   ...     return x + 2
-   ...
-   >>> a = [1, 2, 3, 4]
-   >>> m = rmap(do, a)
-   >>> # nothing printed because evaluation is delayed
-   >>> m[0]
-   computing now
-   3
-   >>> [x for x in m]
-   computing now
-   computing now
-   computing now
-   computing now
-   [3, 4, 5, 6]
+>>> def do(x):
+...     print("computing now")
+...     return x + 2
+...
+>>> a = [1, 2, 3, 4]
+>>> m = rmap(do, a)
+>>> # nothing printed because evaluation is delayed
+>>> m[0]
+computing now
+3
+>>> [x for x in m]
+computing now
+computing now
+computing now
+computing now
+[3, 4, 5, 6]
 
 
 .. toctree::
