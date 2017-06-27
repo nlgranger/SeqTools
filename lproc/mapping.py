@@ -79,6 +79,11 @@ def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     return RMapping(f, *sequence)
 
 
+def imap(f: Callable, *iterable: Iterable) -> Iterable:
+    """Alias for python's :func:`map`."""
+    return map(f, *iterable)
+
+
 class RIMapping(Sequence):
     def __init__(self, f: Callable, *sequences: Sequence[Iterable]):
         assert callable(f), "f must be callable"

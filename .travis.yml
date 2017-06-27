@@ -1,6 +1,7 @@
 dist: trusty
 sudo: false
 language: python
+cache: pip
 python:
 - '3.4'
 - '3.5'
@@ -15,9 +16,24 @@ script:
 after_success:
 - python-codacy-coverage -r coverage.xml
 deploy:
-  provider: pypi
-  user: nlgranger
-  password:
-    secure: dvowuAKe4h69ovwDKMOux6pidceORyQ37rYvFD7oCe4kKP7R5l2JL7Mdxb4anJciUPyqox782xC1l13hMN6IGElGWotFuo29LJfQsAtJa+3Jb+TdiLSdzAnNp+peVAhA180v6kED9I/clnG9vxJsqbxWumcCIsCCgYTbyoFD/5qxZbablmWmQ/QI+D22FOpqWNJwq95cBCKZNxR+zJTYsl+CWJgdnzs38iOyFyLQl2NZGvrqlVjtyAgaUmg3C9YU9Z9T+nx2/QG7R11vpe2qteB3KwXmtpchKWZJd9WnjtKE6PPhUzl7mMjBjkW4DaHwt4pih1DG79lLEFrN7bEPHH4nthA8OUyCKPsDe4em15S9caZfFmHg6B2NqSMzGL73JSktlK68bXJApdKdJq1VmZgsDk/5preDHtDm7HJK3vwbE1iFpdTeTSD/dSg2XlcLXN6R/CwuVTSri67i3064H8BEL00riKf5PTTWmUMXsNlRDR1WtDokMurAgThK0Pzgda5wEYlp0oWwv0vIf0tZhdjKM3xm5KvOVEl/WjWJVx6yDB+B70JLwFUc0/VC2i9FEJxDNhoRToIcyJoFxoGnY66vBjlCXgMDO9g1V2hr3qoLCLEw5MkI+XkSBvvfZoEF7/sdAiPs3kgjBGBXypb4gHLNLrCFow7Cy1GgOg7YwZ0=
-  on:
-    tags: true
+  - provider: pypi
+    server: https://upload.pypi.org/legacy
+    user: nlgranger
+    skip_upload_docs: true
+    password:
+      secure: RZfmdRwPWbT7aGhiUvlPHnfldgwnWJTbxxYPDxy5cF5pnJIse7CA/rSzFVP7gI/nG5yBQaqTYanL+YsZS+84eingiD6b1iMhn1p2ac79ZoDJN5DNsv2++Tl80JRQqg/ws17mi1giiLs86QrSt3XlxkUZtkdxCWN9d1mezL3bScE9Qna6YvS6TxsCF3Mrw1NKpLETMWhgKXgfhkcKZx+oVzykv2sh9DOXRwaPYnw9snta+RH24DxP1eIVwM4+exwPYnO3rRww8LhBHC+iEVhqzAGDwzHldSr6vA81oXUnPsJ1KJBJlSxg1HNewE7CmynTsku+D9JLICUdGeNErpSx+VTAgg539Eu87Cl4ahlP2zVp7tR3eBliEkzdD3deDH6al2cQ/WYyIV+c/5HPks78x8S1OfXxOO1CHh8/M+7x9wvMHs/1w78a6tBNObyOJj6CPbfcSo977V/sRY734JdDeI6irr4NgbmrdMxsTVX8PjHUamh0JwvQC5f6IC/p8dF4vBZwrSpGQGO5R0WaVnhaWaE+9r0fZnVz7sGQKHpwQGSP0+dnTCUdqiT+I4DoPgKgz3dnL2qg6Bop3OCjtihm5ZBdgcuOq+oxQiOVtwRKxOHQEOP8NMj4q6dB8jl9YookhFno0dCyxovkwSYrYX1EMk1CA1GoHxSxIiMKDaS1ecc=
+    on:
+      branch: master
+      tags: true
+      repo: nlgranger/LazyProc
+      condition: $TRAVIS_PYTHON_VERSION = "3.6"
+  - provider: pypi
+    server: https://testpypi.python.org/pypi
+    user: nlgranger
+    skip_upload_docs: true
+    password:
+      secure: XsrC7xwRlZQbdbS1bKlOgjOVmUISbwSYsIwykS+azaaDtj2eYFoSm0ttDG4YOw1LbVayJGLIjZ2leowkYt5AQZMISyKJ7i8t7derkIxlzRw6X6CGQHBXyO9b5Tv60cNMEs5sr0iS6u8pg7rirficgueryRdpBTnwRVnBn4kMQzMz1INR41J6dTFKP7ka6NLaRPlZ77EIl6AwERd/Dv8WjyFSY3q4J2hZ9pZ8XZrPcCvxyMI3k0V/dY8otRUbnrdK5KM6j6BwOYkpPjE4SiET+/KyKapAl7rs70qqRdP3s7sP6nPvv8gIx2BeLHtMPwgLbs3WbXnlbEiGkPGLv6a7mfNgo1OOxGS1HwLYDDoJy13SFU44WrLV7q3EIQupkVnOylY9N2rOb/d8q/xewzZ0z+FgHo+rV495OtXmR3o3T9jLJQHjprx7t2cqX6guMahLkEsm1Fi001wiyGBewshl+TYVJ+lTnAZ07tO/nK+0FyPN8U7F9iQ0hJSvC+JyGBnXKSVbVA9CDCd6d0df6CA1GMWRnQsyoTTffLwBFO4qTF/AJe280verPRRlpXO5H0KoYSBWodS4RLZYszGUNWR/VTmYZlFALNqhRjeripJB+Xo0aeb4jOSkBcrRsLDHX/NPIeYd15E6+yBz60qOtgryw0o25wNfCj36lFFq6kxC1KU=
+    on:
+      all_branches: true
+      tags: false
+      condition: $TRAVIS_PYTHON_VERSION = "3.6" && $TRAVIS_BRANCH != master

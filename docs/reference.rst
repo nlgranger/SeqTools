@@ -11,12 +11,6 @@ API Reference
 
 .. autofunction:: lproc.rrmap
 
+.. autofunction:: lproc.subset
+
 .. autoclass:: SerializableFunc
-
-.. autofunction:: shuffle
-
-.. autofunction:: subset
-
-.. autofunction:: rzip
-
-.. autofunction:: repeat
