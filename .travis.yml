@@ -35,5 +35,4 @@ deploy:
       secure: XsrC7xwRlZQbdbS1bKlOgjOVmUISbwSYsIwykS+azaaDtj2eYFoSm0ttDG4YOw1LbVayJGLIjZ2leowkYt5AQZMISyKJ7i8t7derkIxlzRw6X6CGQHBXyO9b5Tv60cNMEs5sr0iS6u8pg7rirficgueryRdpBTnwRVnBn4kMQzMz1INR41J6dTFKP7ka6NLaRPlZ77EIl6AwERd/Dv8WjyFSY3q4J2hZ9pZ8XZrPcCvxyMI3k0V/dY8otRUbnrdK5KM6j6BwOYkpPjE4SiET+/KyKapAl7rs70qqRdP3s7sP6nPvv8gIx2BeLHtMPwgLbs3WbXnlbEiGkPGLv6a7mfNgo1OOxGS1HwLYDDoJy13SFU44WrLV7q3EIQupkVnOylY9N2rOb/d8q/xewzZ0z+FgHo+rV495OtXmR3o3T9jLJQHjprx7t2cqX6guMahLkEsm1Fi001wiyGBewshl+TYVJ+lTnAZ07tO/nK+0FyPN8U7F9iQ0hJSvC+JyGBnXKSVbVA9CDCd6d0df6CA1GMWRnQsyoTTffLwBFO4qTF/AJe280verPRRlpXO5H0KoYSBWodS4RLZYszGUNWR/VTmYZlFALNqhRjeripJB+Xo0aeb4jOSkBcrRsLDHX/NPIeYd15E6+yBz60qOtgryw0o25wNfCj36lFFq6kxC1KU=
     on:
       all_branches: true
-      tags: false
-      condition: $TRAVIS_PYTHON_VERSION = "3.6" && $TRAVIS_BRANCH != master
+      condition: $TRAVIS_PYTHON_VERSION = "3.6"

@@ -10,6 +10,9 @@ import functools
 class SerializableFunc:
     """Make a function independant from modifications of the source code.
 
+    .. warning::
+        This is hackish and experimental! Only use with care.
+
     This decorator alters the serialization hook so that unpickling the
     function will import a backed-up version of the module containing the
     function.

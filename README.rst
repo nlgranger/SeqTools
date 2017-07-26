@@ -34,17 +34,19 @@ Example
 ...     return x + 2
 ...
 >>> a = [1, 2, 3, 4]
->>> m = rmap(do, a)
->>> # nothing printed because evaluation is delayed
->>> m[0]
-computing now
-3
+>>> # Without lazy mapping:
 >>> [x for x in m]
 computing now
 computing now
 computing now
 computing now
 [3, 4, 5, 6]
+>>> # Using mazy mapping:
+>>> m = rmap(do, a)
+>>> # nothing printed because evaluation is delayed
+>>> m[0]
+computing now
+3
 
 
 Documentation
@@ -56,5 +58,5 @@ Head up to https://lazyproc.readthedocs.io
 Similar libraries
 -----------------
 
-- `Fuel<http://fuel.readthedocs.io/en/latest>`_ is a higher level library target toward
-  machine leraning and dataset manipulation.
+- `Fuel <http://fuel.readthedocs.io/en/latest>`_ is a higher level library
+  targeted toward Machine Learning and dataset manipulation.

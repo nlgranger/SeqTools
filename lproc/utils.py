@@ -44,9 +44,9 @@ def subset(sequence, indexes):
 
     .. note::
 
-        The returned object does not support reindexing itself, and will
-        delegate special indexing to the underlying data. To get a subset
-        of a subset, use nested calls to this function (composed views
-        are flattened out automatically for optimization).
+        You can reindex a subset view with either an integer, a slice a
+        sequence of integer or any supported index for the parent subset
+        index. The last two cases trigger an optimization of the index to avoid
+        repetitive indirections.
     """
     return Subset(sequence, indexes)

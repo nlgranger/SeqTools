@@ -1,10 +1,11 @@
 Welcome to LazyProc
 ===================
 
-Lazy evaluation is a form of delayed execution of a function where the actual computation
-is performed only when the result is actually needed.
+Lazy evaluation is a form of delayed function execution where the actual
+computation is only performed when the result is explicitely used.
 
-LazyProc is a library for lazy mapping of functions over sequencial data.
+LazyProc provides simple tools to facilitate lazy mapping of functions over
+sequential data such as lists, arrays, iterators ...
 
 Example:
 
@@ -17,17 +18,19 @@ Example:
 ...     return x + 2
 ...
 >>> a = [1, 2, 3, 4]
->>> m = rmap(do, a)
->>> # nothing printed because evaluation is delayed
->>> m[0]
-computing now
-3
+>>> # Without lazy mapping:
 >>> [x for x in m]
 computing now
 computing now
 computing now
 computing now
 [3, 4, 5, 6]
+>>> # Using mazy mapping:
+>>> m = rmap(do, a)
+>>> # nothing printed because evaluation is delayed
+>>> m[0]
+computing now
+3
 
 
 .. toctree::
