@@ -28,7 +28,7 @@ deploy:
       repo: nlgranger/LazyProc
       condition: $TRAVIS_PYTHON_VERSION = "3.6"
   - provider: pypi
-    server: https://test.pypi.org/legacy
+    server: https://test.pypi.org/legacy/
     user: nlgranger
     skip_upload_docs: true
     password:
