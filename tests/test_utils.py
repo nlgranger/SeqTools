@@ -1,5 +1,9 @@
-from lproc import subset
-from lproc.utils import Subset
+from itertools import repeat
+from time import sleep, time
+from nose.tools import assert_raises
+from array import array
+from lproc import rmap, subset
+from lproc.utils import Subset, par_iter
 
 
 def test_subset():
@@ -61,3 +65,45 @@ def test_delegated_indexing():
     expected = [10, 5, 2, 8][0:3]
     assert len(s) == len(expected)
     assert all(x == y for x, y in zip(s, expected))
+
+
+def test_par_iter():
+    def f1(x):
+        sleep(.5)
+        return array('d', repeat(x, 1000))
+
+    def f2(x):
+        return sum(x) / len(x)
+
+    x = list(range(50))
+    y = rmap(f1, x)
+    y = rmap(f2, y)
+
+    t1 = time()
+    z1 = list(y)
+    t2 = time()
+
+    t3 = time()
+    z2 = list(par_iter(y, nprocs=4))
+    t4 = time()
+
+    assert all(x == y for x, y in zip(z1, z2))
+    assert (t2 - t1) / (t4 - t3) > 3.5
+
+
+def test_par_iter_errors():
+    class CustomError(Exception):
+        pass
+
+    def f(x):
+        if x is None:
+            raise CustomError()
+        else:
+            return x
+
+    arr = [1, 2, 3, None]
+
+
+    with assert_raises(RuntimeError):
+        for x, y in zip(arr, par_iter(rmap(f, arr), nprocs=4)):
+            assert x == y
