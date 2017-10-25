@@ -1,8 +1,13 @@
+import sys
+from typing import Sequence, Union
+import pickle as pkl
 import array
 import multiprocessing
-import traceback
-from typing import Sequence, Union
-from .common import is_int_item
+from threading import Event, Thread, Semaphore
+from queue import Queue
+from tblib import Traceback
+
+from .common import MappingException, is_int_item
 
 
 class Subset(Sequence):
@@ -11,7 +16,7 @@ class Subset(Sequence):
         if isinstance(sequence, Subset):  # optimize nested subsets
             try:  # let the index type handle subindexing if possible
                 indexes = sequence.indexes[indexes]
-            except Exception:
+            except:
                 indexes = [sequence.indexes[i] for i in indexes]
             sequence = sequence.sequence
 
@@ -54,7 +59,7 @@ def subset(sequence, indexes):
     return Subset(sequence, indexes)
 
 
-class _par_iter_worker:
+class ParIterWorker:
     def __init__(self, seq, q_in, q_out):
         self.seq = seq
         self.q_in = q_in
@@ -67,21 +72,33 @@ class _par_iter_worker:
             i = self.q_in.get()
             if i is None:  # stop on sentinel value
                 return
+
+            try:
+                v = self.seq[i]
+
+            except:
+                et, ev, tb = sys.exc_info()
+                tb = Traceback(tb)
+                try:  # try to send as much picklable information as possible
+                    pkl.loads(pkl.dumps((et, ev, tb)))
+                    self.q_out.put((None, (i, ev, tb)))
+                except:  # nothing more we can do
+                    self.q_out.put((None, (i, None, None)))
+
             else:
-                try:
-                    v = self.seq[i]
-                except Exception:
-                    self.q_out.put((None, (i, traceback.format_exc())))
-                    return
-                else:
-                    self.q_out.put((i, v))
+                self.q_out.put((i, v))
 
     def join(self):
         self.p.join()
 
 
-def par_iter(sequence: Sequence, nprocs=0):
-    """Return an iterator which fetches values ahead with separate threads
+def par_iter(sequence, nprocs=0):
+    """Return an iterator which fetches values ahead using separate subprocesses
+
+    .. warning::
+        This function uses a sub-processes to achieve concurrency, any exception raised
+        while reading source elements will be signaled by a MappingExcaption raised by
+        this function.
 
     :param sequence:
         the sequence to iterate over
@@ -97,45 +114,157 @@ def par_iter(sequence: Sequence, nprocs=0):
     q_out = multiprocessing.Queue(2 * nprocs)
     unordered_results = {}  # temporary storage for results
 
-    proc = [_par_iter_worker(sequence, q_in, q_out) for _ in range(nprocs)]
+    proc = [ParIterWorker(sequence, q_in, q_out) for _ in range(nprocs)]
 
-    n_buffered = 0
+    n_injected = 0
     n_done = 0
 
-    for i in range(len(sequence)):
-        if n_buffered >= 2 * nprocs:  # fetch some results after a while
+    try:
+        while n_done < len(sequence):
+            # inject arguments
+            while n_injected < len(sequence) and q_in.qsize() < nprocs:
+                q_in.put(n_injected)
+                n_injected += 1
+
             idx, v = q_out.get()
-            unordered_results[idx] = v
-            n_buffered -= 1
 
-            # return them in correct order
-            while n_done in unordered_results.keys():
-                yield unordered_results.pop(n_done)
-                n_done += 1
+            if idx is None:
+                i, ev, tb = v
+                if ev is not None:
+                    raise MappingException(
+                        "Accessing element {} of the sequence failed".format(i)) \
+                        from ev.with_traceback(tb.as_traceback())
+                else:
+                    raise MappingException(
+                        "Accessing element {} of the sequence failed".format(i))
 
-        # inject arguments
-        q_in.put(i)
-        n_buffered += 1
+            else:
+                unordered_results[idx] = v
 
-    while n_buffered > 0:  # extract remaining results
-        idx, v = q_out.get()
-        if idx is None:
-            for _ in range(nprocs):  # inject sentinel values to stop threads
-                q_in.put(None)
+                # return them in correct order
+                while n_done in unordered_results.keys():
+                    yield unordered_results.pop(n_done)
+                    n_done += 1
 
-            del proc
-            raise RuntimeError("Accessing the item at index "
-                               "{} failed with the following stack trace: \n{}"
-                               .format(v[0], v[1]))
-        unordered_results[idx] = v
-        n_buffered -= 1
+    except:
+        raise
 
-        while n_done in unordered_results.keys():
-            yield unordered_results.pop(n_done)
-            n_done += 1
+    finally:  # make sure threads are stopped in all cases
+        while not q_out.empty():  # drain active jobs
+            q_out.get()
+        for _ in range(nprocs):  # inject sentinel values to stop threads
+            q_in.put(None)
+        for p in proc:
+            p.join()
 
-    for _ in range(nprocs):  # inject sentinel values to stop threads
-        q_in.put(None)
 
-    for p in proc:
-        p.join()
+def buffer_loader_worker(sources, buffers, chunk_size: int,
+                         rsem: Semaphore, wsem: Semaphore,
+                         end_evt: Event, end_data: Queue):
+    buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
+
+    data_iterator = iter(zip(*sources))
+    offset = 0
+    assert wsem.acquire(blocking=False)  # first block should be readily available
+    while not end_evt.is_set():
+        try:
+            samples = next(data_iterator)
+            for s, b in zip(samples, buffers):
+                b[offset] = s
+            offset += 1
+            if offset % chunk_size == 0:
+                offset = offset % buffer_size
+                rsem.release()
+                wsem.acquire()
+
+        except StopIteration:
+            end_evt.set()
+            end_data.put(offset % chunk_size)
+            rsem.release()
+
+        except:
+            end_evt.set()
+            et, ev, tb = sys.exc_info()
+            tb = Traceback(tb)
+            try:  # try to send as much picklable information as possible
+                pkl.loads(pkl.dumps((et, ev, tb)))
+                end_data.put(ev, tb)
+            except:  # nothing more we can do
+                end_data.put(None)
+
+            rsem.release()
+
+    end_data.put(None)
+
+
+def chunk_load(sources, buffers, chunk_size, pad_last=False):
+    """Load elements into buffers and yield a view every time a full chunk is ready.
+    Typically used to generate minibatches from a bigger dataset.
+
+    .. warning::
+        This function uses a separate thread to take advantage of any inactivity in
+        the main process, any exception raised while reading source elements will
+        be signaled by a MappingExcaption raised by this function.
+
+    :param sources: Sequence[Iterable]
+        The data sources to read from
+    :param buffers: Sequence[Sequence]
+        Target storage corresponding to each data source. Buffers must support
+        slice-based indexing and must be able to store any element from the source at
+        any location along the forst axis
+    :param chunk_size:
+        How many elements should be loaded before yielding a chunks
+    :param pad_last:
+        If True, the last buffers will be zero-padded to chunk_size (by literally
+        assigning the value `0`)
+    """
+    buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
+    n_chunks = buffer_size // chunk_size
+
+    rsem, wsem = Semaphore(0), Semaphore(n_chunks)
+    end_evt = Event()
+    end_data = Queue()
+
+    thread = Thread(target=buffer_loader_worker,
+                    args=(sources, buffers, chunk_size, rsem, wsem, end_evt, end_data))
+    thread.start()
+
+    try:
+        offset = 0
+        while True:
+            rsem.acquire()
+            if end_evt.is_set():
+                v = end_data.get()
+
+                if isinstance(v, int) and pad_last:
+                    if v == 0:
+                        break
+                    for b in buffers:  # blank padded buffer values
+                        b[offset + v:] = 0
+                    yield tuple([b[offset:offset + chunk_size] for b in buffers])
+                    break
+                elif isinstance(v, int) and not pad_last:
+                    if v == 0:
+                        break
+                    yield tuple([b[offset:offset + v] for b in buffers])
+                    break
+                elif isinstance(v, tuple):
+                    ev, tb = v
+                    raise MappingException("Exception raised while reading sources") \
+                        from ev.with_traceback(tb)
+                else:
+                    raise MappingException("Exception raised while reading sources")
+
+            else:
+                yield tuple([b[offset:offset + chunk_size] for b in buffers])
+                offset = (offset + chunk_size) % buffer_size
+                wsem.release()
+
+    except:
+        raise
+
+    finally:
+        end_evt.set()
+        wsem.release()
+        end_data.get()
+        thread.join()

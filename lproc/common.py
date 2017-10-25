@@ -1,3 +1,7 @@
+class MappingException(Exception):
+    pass
+
+
 def is_int_item(item):
     # note: length test helps identify numpy arrays with one element which
     # can be casted to int but is inconsistent with what we expect from

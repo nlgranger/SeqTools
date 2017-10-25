@@ -11,6 +11,7 @@ setup(
     packages=['lproc'],
     version='0.1.1',
     install_requires=[
+        'tblib',
         'typing;python_version<"3.6"'
     ],
     python_requires='>=3',

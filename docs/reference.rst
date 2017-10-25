@@ -14,3 +14,7 @@ API Reference
 .. autofunction:: lproc.subset
 
 .. autoclass:: SerializableFunc
+
+.. autofunction:: par_iter
+
+.. autofunction:: chunk_load

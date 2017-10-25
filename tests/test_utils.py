@@ -2,8 +2,8 @@ from itertools import repeat
 from time import sleep, time
 from nose.tools import assert_raises
 from array import array
-from lproc import rmap, subset
-from lproc.utils import Subset, par_iter
+from lproc import rmap, subset, MappingException
+from lproc.utils import Subset, par_iter, chunk_load
 
 
 def test_subset():
@@ -69,7 +69,7 @@ def test_delegated_indexing():
 
 def test_par_iter():
     def f1(x):
-        sleep(.5)
+        sleep(.05)
         return array('d', repeat(x, 1000))
 
     def f2(x):
@@ -103,7 +103,52 @@ def test_par_iter_errors():
 
     arr = [1, 2, 3, None]
 
-
-    with assert_raises(RuntimeError):
+    with assert_raises(MappingException):
         for x, y in zip(arr, par_iter(rmap(f, arr), nprocs=4)):
             assert x == y
+
+
+def test_buffer_loader():
+    class SlowDataSource:
+        def __init__(self, data):
+            self.data = data
+
+        def __getitem__(self, item):
+            return self.data[item]
+
+        def __iter__(self):
+            for x in self.data:
+                sleep(0.01)
+                yield x
+
+    arr = SlowDataSource(range(100))
+    buffer = [0] * 10
+
+    t1 = time()
+    for i, x in enumerate(arr):
+        buffer[i % 5] = x
+        if (i + 1) % 5 == 0:
+            for k in range(5):
+                assert(buffer[k] == arr[i - 4 + k])
+            sleep(0.05)
+    t2 = time()
+
+    t3 = time()
+    for i, (b,) in enumerate(chunk_load([arr], [buffer], 5)):
+        for k in range(5):
+            assert(b[k] == arr[i * 5 + k])
+        sleep(0.05)
+    t4 = time()
+
+    assert abs((t2 - t1) - 2) < 0.1
+    assert abs((t4 - t3) - 1.05) < 0.1
+
+
+def test_buffer_loader_errors():
+    arr = [0, 1, 2, 3, 4, 5, 6, None, 7, 8, 9]
+    arr = rmap(int, arr)
+    buffer = [0, 0, 0, 0]
+
+    with assert_raises(MappingException):
+        for i, (b,) in enumerate(chunk_load([arr], [buffer], chunk_size=2)):
+            assert (b[0] == arr[i * 2]) and (b[1] == arr[i * 2 + 1])
