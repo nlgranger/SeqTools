@@ -1,10 +1,10 @@
 import sys
 from typing import Sequence, Union
-import pickle as pkl
 import array
 import multiprocessing
 from threading import Event, Thread, Semaphore
 from queue import Queue
+import pickle as pkl
 from tblib import Traceback
 from collections import OrderedDict
 
@@ -17,7 +17,7 @@ class Subset(Sequence):
         if isinstance(sequence, Subset):  # optimize nested subsets
             try:  # let the index type handle subindexing if possible
                 indexes = sequence.indexes[indexes]
-            except:
+            except Exception:
                 indexes = [sequence.indexes[i] for i in indexes]
             sequence = sequence.sequence
 
@@ -82,7 +82,7 @@ class CachedSequence(Sequence):
 
 
 def add_cache(arr, cache_size=1):
-    """Add cache over a sequence to accelerate access on the most recently
+    """Add cache over a sequence to accelerate access to the most recently
     accessed items.
 
     :param arr:
@@ -114,13 +114,13 @@ class ParIterWorker:
             try:
                 v = self.sequence[i]
 
-            except:
-                et, ev, tb = sys.exc_info()
-                tb = Traceback(tb)
+            except Exception:
                 try:  # try to send as much picklable information as possible
-                    pkl.loads(pkl.dumps((et, ev, tb)))
+                    _, ev, tb = sys.exc_info()
+                    tb = Traceback(tb)
+                    pkl.dumps((ev, tb))  # Check picklable
                     self.q_out.put((None, (i, ev, tb)))
-                except:  # nothing more we can do
+                except Exception:  # nothing more we can do
                     self.q_out.put((None, (i, None, None)))
 
             else:
@@ -226,14 +226,14 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
             end_data.put(offset % chunk_size)
             rsem.release()
 
-        except:
+        except Exception:
             end_evt.set()
             try:  # try to send as much picklable information as possible
-                et, ev, tb = sys.exc_info()
+                _, ev, tb = sys.exc_info()
                 tb = Traceback(tb)
-                pkl.loads(pkl.dumps((et, ev, tb)))
+                pkl.dumps((ev, tb))  # Check picklable
                 end_data.put(ev, tb)
-            except:  # nothing more we can do
+            except Exception:  # nothing more we can do
                 end_data.put(None)
 
             rsem.release()
