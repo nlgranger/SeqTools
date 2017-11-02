@@ -1,8 +1,8 @@
 Tutorial
 ========
 
-Basic functionalities
----------------------
+Simple mapping
+--------------
 
 The most basic (and possibly the most useful) function is :func:`lproc.rmap`
 which maps a function to each elements of a container such as a list or an
@@ -27,6 +27,7 @@ lazy evaluation, let's add a notification when the function is called:
 ...
 >>> y1 = rmap(f, l)
 >>> # nothing happened so far
+>>>
 >>> y1[0]  # f will be called now and specifically on item 0
 processing 3
 6
@@ -52,7 +53,7 @@ If `f` is slow to compute or `l` is large, lazy evaluation can dramatically
 reduce the delay to obtain any individual results. Furthermore, on can
 chain several transformations in a pipeline. This is particularly convenient
 when intermediate transformations are memory heavy because the intermediate
-results are stored for one element at a time:
+results are stored for only one element at a time:
 
 >>> def f(x):
 ...     # This intermediate result takes a lot of space...
@@ -81,32 +82,29 @@ results are stored for one element at a time:
 Indexing
 --------
 
-This approach preserves some of the convenient aspects of sequences such as
-iteration and slicing:
+:func:`lproc.rmap` tries to preserve the simplicity of slice-based indexing:
 
->>> [x for x in y]
-[6, 10, 2, 8]
->>> list(y)
-[6, 10, 2, 8]
+>>> l = [3, 5, 1, 4]
+>>> y = rmap(lambda x: x * 2, l)
 >>> [x for x in y[1:-1]]
 [10, 2]
 >>> len(y)
 4
->>> len(y[1:-1])  # known before calling f
+>>> len(y[1:-1])  # known without processing the array
 2
 
-When the requested index is not an integer or a slice, :func:`rmap`
+When the requested index is not an integer or a slice, :func:`lproc.rmap`
 will try to delegates indexing to the input data sequence:
 
 >>> import numpy as np
 >>> arr = np.arange(5)
 >>> y = rmap(lambda x: x * 2, arr)
->>> list(y[[1, 3, 4]])  # is actually: list(rmap(arr[1, 3, 4], lambda x: x * 2, arr))
+>>> list(y[[1, 3, 4]])  #  ~= list(rmap(arr[1, 3, 4], lambda x: x * 2, arr))
 [2, 8, 10]
 
 
-Special inputs
---------------
+Merge inputs
+------------
 
 Similarly to :func:`map`, if more than one sequence is passed, they are zipped
 together and fed as distinct arguments to the function:
@@ -117,6 +115,26 @@ together and fed as distinct arguments to the function:
 >>> list(y)
 [7, 10, 8, 6]
 
+
+Going further
+-------------
+
 For datasets with a second level of indirection such as an array of arrays
-or an array of iterables, one can use :func:`rrmap` and :func:`rimap`
-respectively.
+or an array of iterables, one can use :func:`lproc.rrmap` and
+:func:`proc.rimap` respectively.
+
+:func:`lproc.subset` lets one manipulate a subset of a sequence based on a
+selection of indexes.
+
+:func:`lproc.par_iter` returns an multiprocessing-enabled iterator over a
+sequence to quickly process an array.
+
+Similarly, :func:`lproc.chunk_load` evaluates sequences chunk by chunk and
+loads them into buffers (think minibatch iterator if you come from the Machine
+Learning field).
+
+:func:`lproc.add_cache` provides a simple form of memoïzation or caching to
+avoid reapeated computations when elements are accessed multiple times.
+
+The library is quite small for now, how about giving a quick glance at the
+`API Reference`?

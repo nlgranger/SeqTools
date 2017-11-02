@@ -1,9 +1,10 @@
 from itertools import repeat
 from time import sleep, time
-from nose.tools import assert_raises
+import random
 from array import array
-from lproc import rmap, subset, MappingException
-from lproc.utils import Subset, par_iter, chunk_load
+from nose.tools import assert_raises, timed
+from lproc import rmap, subset, add_cache, par_iter, chunk_load, AccessException
+from lproc.utils import Subset
 
 
 def test_subset():
@@ -67,15 +68,41 @@ def test_delegated_indexing():
     assert all(x == y for x, y in zip(s, expected))
 
 
+def test_cached():
+    def f(x):
+        sleep(.02)
+        return x
+
+    x = [random.random() for _ in range(50)]
+    y = rmap(f, x)
+    z = add_cache(y)
+
+    t1 = time()
+    for i in range(len(x)):
+        assert y[i] == x[i]
+        assert y[i] == x[i]
+    t2 = time()
+
+    t3 = time()
+    for i in range(len(x)):
+        assert z[i] == x[i]
+        assert z[i] == x[i]
+    t4 = time()
+
+    speedup = (t2 - t1) / (t4 - t3)
+    assert speedup > 1.9
+
+
+@timed(15)
 def test_par_iter():
     def f1(x):
-        sleep(.05)
+        sleep(.1)
         return array('d', repeat(x, 1000))
 
     def f2(x):
         return sum(x) / len(x)
 
-    x = list(range(50))
+    x = list(range(70))
     y = rmap(f1, x)
     y = rmap(f2, y)
 
@@ -88,9 +115,11 @@ def test_par_iter():
     t4 = time()
 
     assert all(x == y for x, y in zip(z1, z2))
-    assert (t2 - t1) / (t4 - t3) > 3.5
+    speedup = (t2 - t1) / (t4 - t3)
+    assert speedup > 3
 
 
+@timed(5)
 def test_par_iter_errors():
     class CustomError(Exception):
         pass
@@ -103,11 +132,12 @@ def test_par_iter_errors():
 
     arr = [1, 2, 3, None]
 
-    with assert_raises(MappingException):
+    with assert_raises(AccessException):
         for x, y in zip(arr, par_iter(rmap(f, arr), nprocs=4)):
             assert x == y
 
 
+@timed(5)
 def test_buffer_loader():
     class SlowDataSource:
         def __init__(self, data):
@@ -140,15 +170,20 @@ def test_buffer_loader():
         sleep(0.05)
     t4 = time()
 
-    assert abs((t2 - t1) - 2) < 0.1
-    assert abs((t4 - t3) - 1.05) < 0.1
+    assert abs((t2 - t1) - 2) < 0.2
+    assert abs((t4 - t3) - 1.05) < 0.2
 
 
+@timed(5)
 def test_buffer_loader_errors():
     arr = [0, 1, 2, 3, 4, 5, 6, None, 7, 8, 9]
     arr = rmap(int, arr)
     buffer = [0, 0, 0, 0]
 
-    with assert_raises(MappingException):
+    with assert_raises(AccessException):
         for i, (b,) in enumerate(chunk_load([arr], [buffer], chunk_size=2)):
             assert (b[0] == arr[i * 2]) and (b[1] == arr[i * 2 + 1])
+
+    it = chunk_load([arr], [buffer], chunk_size=2)
+    next(it)
+    del it

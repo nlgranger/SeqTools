@@ -45,15 +45,15 @@ class RMapping(Sequence):
 def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     """Return lazy mapping of a sequence.
 
-    Lazy version of `[f(x) for x in sequence]`.
+    Lazy version of :code:`[f(x) for x in sequence]`.
 
     If several sequences are passed, they will be zipped together and items
     from eachs will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
 
     Only integer indexing is handled directly, other forms of indexing (slices,
-    list of integers...) are forwarded to the :code:`sequence` argument.
-    If this is undesirable, you may want to use :func:`lproc.subset` instead.
+    list of integers...) are delegated to wrapped sequence(s). If this is
+    undesirable, you may want to use :func:`lproc.subset` instead.
 
     Example:
 
@@ -102,11 +102,11 @@ class RIMapping(Sequence):
 def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
     """Return lazy mapping of iterable elements within a sequence.
 
-    Lazy verion of `[map(f, it) for it in sequence]`.
+    Lazy verion of :code:`[map(f, it) for it in sequence]`.
 
     If several arrays are passed, the iterables at a given index will be zipped
     together and the generated items passed as separate arguments to f:
-    `[map(f, zip(*it)) for it in zip(sequences)]`
+    :code:`[map(f, zip(*it)) for it in zip(sequences)]`
     """
     return RIMapping(f, *sequence)
 
@@ -114,10 +114,10 @@ def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
 def rrmap(f: Callable, *sequence: Sequence) -> Sequence:
     """Return lazy mapping of sequencial elements within a sequence.
 
-    Lazy version of `[[f(*e) for e in zip(s)] for s in zip(sequence)]`.s
+    Lazy version of :code:`[[f(*e) for e in zip(s)] for s in zip(sequence)]`.
 
     If several arrays are passed, the sequences at a given index will be zipped
     together and the corresponding items passed as separate arguments to f:
-    `[[f(*x) for x in zip(*s)] for s in sequences]`
+    :code:`[[f(*x) for x in zip(*s)] for s in sequences]`
     """
     return RMapping(lambda *l: RMapping(f, *l), *sequence)

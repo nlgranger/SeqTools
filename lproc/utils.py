@@ -6,8 +6,9 @@ import multiprocessing
 from threading import Event, Thread, Semaphore
 from queue import Queue
 from tblib import Traceback
+from collections import OrderedDict
 
-from .common import MappingException, is_int_item
+from .common import is_int_item
 
 
 class Subset(Sequence):
@@ -51,17 +52,54 @@ def subset(sequence, indexes):
 
     .. note::
 
-        You can reindex a subset view with either an integer, a slice a
-        sequence of integer or any supported index for the parent subset
-        index. The last two cases trigger an optimization of the index to avoid
+        This function will try to optimize nested re-indexing to avoid
         repetitive indirections.
     """
     return Subset(sequence, indexes)
 
 
+class CachedSequence(Sequence):
+    def __init__(self, arr, cache_size=1):
+        self.arr = arr
+        self.cache = OrderedDict()
+        self.cache_size = cache_size
+
+    def __len__(self):
+        return len(self.arr)
+
+    def __getitem__(self, item):
+        if item in self.cache:
+            return self.cache[item]
+        else:
+            value = self.arr[item]
+            if len(self.cache) >= self.cache_size:
+                self.cache.popitem()
+            self.cache[item] = value
+            return value
+
+    def __iter__(self):
+        return iter(self.arr)
+
+
+def add_cache(arr, cache_size=1):
+    """Add cache over a sequence to accelerate access on the most recently
+    accessed items.
+
+    :param arr:
+        Sequence to provide a cache for.
+    :param cache_size:
+        Maximum number of cached values.
+    """
+    return CachedSequence(arr, cache_size)
+
+
+class AccessException(RuntimeError):
+    pass
+
+
 class ParIterWorker:
-    def __init__(self, seq, q_in, q_out):
-        self.seq = seq
+    def __init__(self, sequence, q_in, q_out):
+        self.sequence = sequence
         self.q_in = q_in
         self.q_out = q_out
         self.p = multiprocessing.Process(target=self.do)
@@ -74,7 +112,7 @@ class ParIterWorker:
                 return
 
             try:
-                v = self.seq[i]
+                v = self.sequence[i]
 
             except:
                 et, ev, tb = sys.exc_info()
@@ -93,18 +131,24 @@ class ParIterWorker:
 
 
 def par_iter(sequence, nprocs=0):
-    """Return an iterator which fetches values ahead using separate subprocesses
-
-    .. warning::
-        This function uses a sub-processes to achieve concurrency, any exception raised
-        while reading source elements will be signaled by a MappingExcaption raised by
-        this function.
+    """Return an iterator which fetches values ahead using separate
+    subprocesses.
 
     :param sequence:
         the sequence to iterate over
     :param nprocs:
-        Number of workers to use. 0 or negative values indicate the number of CPU
-        cores to spare. Default: 0 (one worker by cpu core)
+        Number of workers to use. 0 or negative values indicate the number of
+        CPU cores to spare. Default: 0 (one worker by cpu core)
+
+    .. warning::
+        This function uses sub-processes to achieve concurrency, any exception
+        raised while reading source elements will be signaled by an
+        :class:`AccessException` raised by this function.
+
+    .. note::
+        Due to the nature of inter-process communication, the computed values
+        must be serialized before being returned to the main thread therefore
+        incurring a computation and communication overhead.
     """
 
     if nprocs <= 0:
@@ -131,12 +175,12 @@ def par_iter(sequence, nprocs=0):
             if idx is None:
                 i, ev, tb = v
                 if ev is not None:
-                    raise MappingException(
-                        "Accessing element {} of the sequence failed".format(i)) \
+                    raise AccessException(
+                        "Accessing index {} failed".format(i)) \
                         from ev.with_traceback(tb.as_traceback())
                 else:
-                    raise MappingException(
-                        "Accessing element {} of the sequence failed".format(i))
+                    raise AccessException(
+                        "Accessing index {} failed".format(i))
 
             else:
                 unordered_results[idx] = v
@@ -163,9 +207,9 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
                          end_evt: Event, end_data: Queue):
     buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
 
-    data_iterator = iter(zip(*sources))
+    data_iterator = iter(sources)
     offset = 0
-    assert wsem.acquire(blocking=False)  # first block should be readily available
+    assert wsem.acquire(blocking=False)  # first block should be available
     while not end_evt.is_set():
         try:
             samples = next(data_iterator)
@@ -184,9 +228,9 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
 
         except:
             end_evt.set()
-            et, ev, tb = sys.exc_info()
-            tb = Traceback(tb)
             try:  # try to send as much picklable information as possible
+                et, ev, tb = sys.exc_info()
+                tb = Traceback(tb)
                 pkl.loads(pkl.dumps((et, ev, tb)))
                 end_data.put(ev, tb)
             except:  # nothing more we can do
@@ -198,26 +242,31 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
 
 
 def chunk_load(sources, buffers, chunk_size, pad_last=False):
-    """Load elements into buffers and yield a view every time a full chunk is ready.
-    Typically used to generate minibatches from a bigger dataset.
-
-    .. warning::
-        This function uses a separate thread to take advantage of any inactivity in
-        the main process, any exception raised while reading source elements will
-        be signaled by a MappingExcaption raised by this function.
+    """Load elements from iterables into buffers and yield a view every time a
+    full chunk is ready. Typically used to generate minibatches from a dataset.
 
     :param sources: Sequence[Iterable]
         The data sources to read from
     :param buffers: Sequence[Sequence]
         Target storage corresponding to each data source. Buffers must support
-        slice-based indexing and must be able to store any element from the source at
-        any location along the forst axis
+        slice-based indexing and must be able to store any element from the
+        source at any location along the forst axis
     :param chunk_size:
         How many elements should be loaded before yielding a chunks
     :param pad_last:
-        If True, the last buffers will be zero-padded to chunk_size (by literally
-        assigning the value `0`)
+        If True, the last buffers will be zero-padded to chunk_size (by
+        literally assigning the value `0`)
+
+    .. warning::
+        This function uses a separate thread to take advantage of any
+        inactivity in the main process, any exception raised while reading
+        source elements will be signaled by an :class:`AccessException` raised
+        by this function.
     """
+
+    assert(len(sources) == len(buffers))
+    sources = zip(*sources)
+
     buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
     n_chunks = buffer_size // chunk_size
 
@@ -226,7 +275,8 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
     end_data = Queue()
 
     thread = Thread(target=buffer_loader_worker,
-                    args=(sources, buffers, chunk_size, rsem, wsem, end_evt, end_data))
+                    args=(sources, buffers, chunk_size,
+                          rsem, wsem, end_evt, end_data))
     thread.start()
 
     try:
@@ -241,7 +291,8 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
                         break
                     for b in buffers:  # blank padded buffer values
                         b[offset + v:] = 0
-                    yield tuple([b[offset:offset + chunk_size] for b in buffers])
+                    yield tuple([b[offset:offset + chunk_size]
+                                 for b in buffers])
                     break
                 elif isinstance(v, int) and not pad_last:
                     if v == 0:
@@ -250,10 +301,12 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
                     break
                 elif isinstance(v, tuple):
                     ev, tb = v
-                    raise MappingException("Exception raised while reading sources") \
+                    raise AccessException(
+                        "Exception raised while reading sources") \
                         from ev.with_traceback(tb)
                 else:
-                    raise MappingException("Exception raised while reading sources")
+                    raise AccessException(
+                        "Exception raised while reading sources")
 
             else:
                 yield tuple([b[offset:offset + chunk_size] for b in buffers])

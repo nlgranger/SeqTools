@@ -5,16 +5,31 @@ API Reference
 
 .. currentmodule:: lproc
 
+Mapping
+-------
+
 .. autofunction:: lproc.rmap
 
 .. autofunction:: lproc.rimap
 
 .. autofunction:: lproc.rrmap
 
+
+Indexing
+--------
+
 .. autofunction:: lproc.subset
 
-.. autoclass:: SerializableFunc
+Evaluation
+----------
 
-.. autofunction:: par_iter
+.. autofunction:: lproc.par_iter
 
-.. autofunction:: chunk_load
+.. autofunction:: lproc.chunk_load
+
+Other
+-----
+
+.. autofunction:: lproc.add_cache
+
+.. autoclass:: lproc.AccessException
