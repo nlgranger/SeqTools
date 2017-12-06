@@ -3,8 +3,8 @@ from time import sleep, time
 import random
 from array import array
 from nose.tools import assert_raises, timed
-from lproc import rmap, subset, add_cache, par_iter, chunk_load, AccessException
-from lproc.utils import Subset
+from lproc import *
+from lproc.utils import Subset, AccessException, Concatenation
 
 
 def test_subset():
@@ -66,6 +66,26 @@ def test_delegated_indexing():
     expected = [10, 5, 2, 8][0:3]
     assert len(s) == len(expected)
     assert all(x == y for x, y in zip(s, expected))
+
+
+def test_concat_collate():
+    a = [1, 2, 3, 4]
+    b = ['a', 'b', 'c', 'd']
+    c = [5, 6, 7, 8]
+
+    arr1 = concatenate((a, b, c))
+    arr2 = a + b + c
+    assert all([x1 == x2 for x1, x2 in zip(arr1, arr2)])
+
+    arr1 = concatenate((a, b, c, arr1))
+    arr2 = a + b + c + a + b + c
+    assert all([x1 == x2 for x1, x2 in zip(arr1, arr2)])
+    assert not any([isinstance(s, Concatenation) for s in arr1.sequences])
+
+    arr1 = collate((a, b, c))
+    arr2 = list(zip(a, b, c))
+    assert arr1[0] == arr2[0]
+    assert all([x1 == x2 for x1, x2 in zip(arr1, arr2)])
 
 
 def test_cached():

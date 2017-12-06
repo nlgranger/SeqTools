@@ -1,35 +1,47 @@
+.. testsetup:: *
+
+   from lproc import *
+
+.. currentmodule:: lproc
+
+
 API Reference
 =============
 
-.. automodule:: lproc
+.. autosummary::
 
-.. currentmodule:: lproc
+    rmap
+    rimap
+    rrmap
+    concatenate
+    collate
+    subset
+    par_iter
+    chunk_load
+
 
 Mapping
 -------
 
-.. autofunction:: lproc.rmap
-
-.. autofunction:: lproc.rimap
-
-.. autofunction:: lproc.rrmap
+.. autofunction:: rmap
+.. autofunction:: rimap
+.. autofunction:: rrmap
 
 
-Indexing
---------
+Index manipulation
+------------------
 
-.. autofunction:: lproc.subset
+.. autofunction:: concatenate
+.. autofunction:: collate
+.. autofunction:: subset
 
-Evaluation
-----------
 
-.. autofunction:: lproc.par_iter
+Serialization
+-------------
 
-.. autofunction:: lproc.chunk_load
+At some point, you will want to evaluation the values in your lists, those
+function can help you process large sequences.
 
-Other
------
-
-.. autofunction:: lproc.add_cache
-
-.. autoclass:: lproc.AccessException
+.. autofunction:: par_iter
+.. autofunction:: chunk_load
+.. autoclass:: SerializableFunc

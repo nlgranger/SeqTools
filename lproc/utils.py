@@ -1,6 +1,7 @@
 import sys
 from typing import Sequence, Union
 import array
+import bisect
 import multiprocessing
 from threading import Event, Thread, Semaphore
 from queue import Queue
@@ -15,7 +16,7 @@ class Subset(Sequence):
     def __init__(self, sequence: Union[Sequence, 'Subset'],
                  indexes: Union[Sequence[int], slice]):
         if isinstance(sequence, Subset):  # optimize nested subsets
-            try:  # let the index type handle subindexing if possible
+            try:  # let the index type handle sub-indexing if possible
                 indexes = sequence.indexes[indexes]
             except Exception:
                 indexes = [sequence.indexes[i] for i in indexes]
@@ -56,6 +57,68 @@ def subset(sequence, indexes):
         repetitive indirections.
     """
     return Subset(sequence, indexes)
+
+
+class Concatenation(Sequence):
+    def __init__(self, sequences):
+        self.sequences = []
+        for s in sequences:
+            if isinstance(s, Concatenation):
+                for ss in s.sequences:
+                    self.sequences.append(ss)
+            else:
+                self.sequences.append(s)
+
+        self.offsets = array.array('L', [0] + [len(s) for s in sequences])
+        for i in range(1, len(sequences)):
+            self.offsets[i] += self.offsets[i - 1]
+
+    def __len__(self):
+        return self.offsets[-1]
+
+    def __getitem__(self, item):
+        if not 0 < item < len(self):
+            raise IndexError("index out of range")
+
+        s = bisect.bisect(self.offsets, item) - 1
+        return self.sequences[s][item - self.offsets[s]]
+
+
+def concatenate(sequences):
+    """Return a concatenated view of a list of sequences."""
+    return Concatenation(sequences)
+
+
+class Collation(Sequence):
+    def __init__(self, sequences):
+        self.sequences = sequences
+
+        if not all([len(s) == len(self.sequences[0])
+                    for s in self.sequences]):
+            raise ValueError("all sequences should have the same length")
+
+    def __len__(self):
+        return len(self.sequences[0])
+
+    def __getitem__(self, item):
+        return tuple([s[item] for s in self.sequences])
+
+    def __iter__(self):
+        return zip(*self.sequences)
+
+
+def collate(sequences):
+    """Stack or paste multiple sequences together.
+
+    The n'th element is a tuple of the n'th elements from each sequence.
+
+    Example:
+
+    >>> arr = collate([[1, 2, 3, 4], ['a', 'b', 'c', 'd'], [5, 6, 7, 8]])
+    >>> arr[2]
+    (3, 'c', 7)
+    """
+    return Collation(sequences)
 
 
 class CachedSequence(Sequence):
@@ -114,13 +177,13 @@ class ParIterWorker:
             try:
                 v = self.sequence[i]
 
-            except Exception:
+            except:
                 try:  # try to send as much picklable information as possible
                     _, ev, tb = sys.exc_info()
                     tb = Traceback(tb)
                     pkl.dumps((ev, tb))  # Check picklable
                     self.q_out.put((None, (i, ev, tb)))
-                except Exception:  # nothing more we can do
+                except:  # nothing more we can do
                     self.q_out.put((None, (i, None, None)))
 
             else:
@@ -207,12 +270,12 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
                          end_evt: Event, end_data: Queue):
     buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
 
-    data_iterator = iter(sources)
     offset = 0
     assert wsem.acquire(blocking=False)  # first block should be available
     while not end_evt.is_set():
+        # noinspection PyBroadException
         try:
-            samples = next(data_iterator)
+            samples = next(sources)
             for s, b in zip(samples, buffers):
                 b[offset] = s
             offset += 1
@@ -228,11 +291,12 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
 
         except Exception:
             end_evt.set()
+            # noinspection PyBroadException
             try:  # try to send as much picklable information as possible
                 _, ev, tb = sys.exc_info()
                 tb = Traceback(tb)
                 pkl.dumps((ev, tb))  # Check picklable
-                end_data.put(ev, tb)
+                end_data.put((ev, tb))
             except Exception:  # nothing more we can do
                 end_data.put(None)
 
@@ -241,7 +305,7 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
     end_data.put(None)
 
 
-def chunk_load(sources, buffers, chunk_size, pad_last=False):
+def chunk_load(sources, buffers, chunk_size, drop_last=False, pad_last=False):
     """Load elements from iterables into buffers and yield a view every time a
     full chunk is ready. Typically used to generate minibatches from a dataset.
 
@@ -251,8 +315,10 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
         Target storage corresponding to each data source. Buffers must support
         slice-based indexing and must be able to store any element from the
         source at any location along the forst axis
-    :param chunk_size:
+    :param chunk_size: int
         How many elements should be loaded before yielding a chunks
+    :param drop_last: bool
+        Ignore the last chunk if it is smaller than `chunk_size`.
     :param pad_last:
         If True, the last buffers will be zero-padded to chunk_size (by
         literally assigning the value `0`)
@@ -295,7 +361,7 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
                                  for b in buffers])
                     break
                 elif isinstance(v, int) and not pad_last:
-                    if v == 0:
+                    if v == 0 or (drop_last and v < chunk_size):
                         break
                     yield tuple([b[offset:offset + v] for b in buffers])
                     break
@@ -303,7 +369,7 @@ def chunk_load(sources, buffers, chunk_size, pad_last=False):
                     ev, tb = v
                     raise AccessException(
                         "Exception raised while reading sources") \
-                        from ev.with_traceback(tb)
+                        from ev.with_traceback(tb.as_traceback())
                 else:
                     raise AccessException(
                         "Exception raised while reading sources")

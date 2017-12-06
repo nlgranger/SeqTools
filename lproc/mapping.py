@@ -57,6 +57,10 @@ def rmap(f: Callable, *sequence: Sequence) -> Sequence:
 
     Example:
 
+    .. testsetup::
+
+        from lproc import rmap
+
     >>> a = [1, 2, 3, 4]
     >>> [x + 2 for x in a]
     [3, 4, 5, 6]

@@ -52,7 +52,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'LazyProc'
+project = 'lproc'
 copyright = '2017, Nicolas Granger'
 author = 'Nicolas Granger'
 

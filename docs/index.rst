@@ -1,56 +1,50 @@
-Welcome to LazyProc
-===================
+.. toctree::
+   :hidden:
+   :maxdepth: 3
 
-Lazy evaluation is a form of delayed function execution where the actual
-computation is only performed when the result is explicitely used.
+   installation
+   mapping
+   reference
 
-LazyProc provides simple tools to facilitate lazy mapping of functions over
-sequential data such as lists, arrays, iterators...
+.. testsetup::
 
-This library was developed in the context of managing datasets with elements of fearly
-large size for machine learning. It hides the complexity of data manipulation while
-keeping memory usage low.
+   import lproc
 
-Example:
 
-.. testsetup:: *
+LazyProc
+========
 
-   from lproc import rmap
+Lazy evaluation is a form of of delayed execution of a function where the
+actual is performed onlywhen the result is actually needed.
+
+LazyProc focuses on lazy-processing of sequential data such as lists or arrays
+or any indexable object. It is designed to ease testing and execution of
+multi-stage transformation pipelines over datasets.
 
 >>> def do(x):
 ...     print("computing now")
 ...     return x + 2
 ...
 >>> a = [1, 2, 3, 4]
->>>
 >>> # Without lazy mapping:
->>> [x for x in m]
+>>> [do(x) for x in a]
 computing now
 computing now
 computing now
 computing now
 [3, 4, 5, 6]
->>>
 >>> # Using mazy mapping:
->>> m = rmap(do, a)
+>>> m = lproc.rmap(do, a)
 >>> # nothing printed because evaluation is delayed
->>>
 >>> m[0]
 computing now
 3
 
 
-.. toctree::
-   :hidden:
-   :maxdepth: 2
+Similar libraries
+-----------------
 
-   installation
-   mapping
-   reference
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+- `Fuel <http://fuel.readthedocs.io/en/latest>`_ is a higher level library
+  targeted toward Machine Learning and dataset manipulation.
+- `torchvision.transforms <http://pytorch.org/docs/master/torchvision/transforms.html>`_
+  and `torch.utils.data <http://pytorch.org/docs/master/data.html>`_.

@@ -8,9 +8,9 @@ The most basic (and possibly the most useful) function is :func:`lproc.rmap`
 which maps a function to each elements of a container such as a list or an
 array:
 
-.. testsetup:: *
+.. testsetup::
 
-   from lproc import rmap
+   from lproc import *
 
 
 >>> l = [3, 5, 1, 4]
@@ -70,13 +70,13 @@ results are stored for only one element at a time:
 >>>
 >>> # compute one of the output values only uses sizeof(float) * 10000
 >>> y2[2]
-2
+2.0
 >>> # whereas explicitely computing the intermediate transformation
 >>> # requires sizeof(float) * 10000 * 2000
 >>> y3 = [f(x) for x in l]
 >>> y4 = [g(x) for x in y3]
 >>> y4[2]
-2
+2.0
 
 
 Indexing
@@ -100,7 +100,7 @@ will try to delegates indexing to the input data sequence:
 >>> arr = np.arange(5)
 >>> y = rmap(lambda x: x * 2, arr)
 >>> list(y[[1, 3, 4]])  #  ~= list(rmap(arr[1, 3, 4], lambda x: x * 2, arr))
-[2, 8, 10]
+[2, 6, 8]
 
 
 Merge inputs
