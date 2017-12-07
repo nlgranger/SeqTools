@@ -45,3 +45,8 @@ function can help you process large sequences.
 .. autofunction:: par_iter
 .. autofunction:: chunk_load
 .. autoclass:: SerializableFunc
+
+Errors
+------
+
+.. autoclass:: AccessException

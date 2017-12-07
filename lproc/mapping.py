@@ -1,5 +1,5 @@
 import inspect
-from typing import Sequence, Iterable, Callable, Union
+from typing import Sequence
 from .common import is_int_item
 
 
@@ -11,7 +11,7 @@ class MappingException(Exception):
 
 
 class RMapping(Sequence):
-    def __init__(self, f: Callable, *sequence: Sequence):
+    def __init__(self, f, *sequence):
         assert callable(f), "f must be callable"
         assert len(sequence) > 0, "at least one input sample must be provided"
         self.arrays = sequence
@@ -23,7 +23,7 @@ class RMapping(Sequence):
     def __len__(self):
         return len(self.arrays[0])
 
-    def __getitem__(self, item: Union[int, Sequence[int], slice]):
+    def __getitem__(self, item):
         if not is_int_item(item):  # delegate indexing to subtype
             return RMapping(self.f, *list(l[item] for l in self.arrays))
 
@@ -42,7 +42,7 @@ class RMapping(Sequence):
                 raise e from info_e
 
 
-def rmap(f: Callable, *sequence: Sequence) -> Sequence:
+def rmap(f, *sequence):
     """Return lazy mapping of a sequence.
 
     Lazy version of :code:`[f(x) for x in sequence]`.
@@ -83,13 +83,13 @@ def rmap(f: Callable, *sequence: Sequence) -> Sequence:
     return RMapping(f, *sequence)
 
 
-def imap(f: Callable, *iterable: Iterable) -> Iterable:
+def imap(f, *iterable):
     """Alias for python's :func:`map`."""
     return map(f, *iterable)
 
 
 class RIMapping(Sequence):
-    def __init__(self, f: Callable, *sequences: Sequence[Iterable]):
+    def __init__(self, f, *sequences):
         assert callable(f), "f must be callable"
         assert len(sequences) > 0, "at least one input sample must be provided"
         self.f = f
@@ -103,7 +103,7 @@ class RIMapping(Sequence):
         return map(self.f, *kargs)
 
 
-def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
+def rimap(f, *sequence):
     """Return lazy mapping of iterable elements within a sequence.
 
     Lazy verion of :code:`[map(f, it) for it in sequence]`.
@@ -115,7 +115,7 @@ def rimap(f: Callable, *sequence: Sequence[Iterable]) -> Sequence[Iterable]:
     return RIMapping(f, *sequence)
 
 
-def rrmap(f: Callable, *sequence: Sequence) -> Sequence:
+def rrmap(f, *sequence):
     """Return lazy mapping of sequencial elements within a sequence.
 
     Lazy version of :code:`[[f(*e) for e in zip(s)] for s in zip(sequence)]`.

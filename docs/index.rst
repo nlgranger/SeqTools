@@ -3,7 +3,7 @@
    :maxdepth: 3
 
    installation
-   mapping
+   tutorial
    reference
 
 .. testsetup::
@@ -39,6 +39,47 @@ computing now
 >>> m[0]
 computing now
 3
+
+Compared to sequential execution of functions over a sequence, lproc let's one
+look at single elements without computing all the prior transformation steps
+for the other elements, and without storing the intermediate processing values.
+
+>>> nops = 0
+>>>
+>>> def f1(x):
+...     global nops
+...     nops += 1
+...     return x + 1
+...
+>>> def f2(x):  # simulate slow and memory heavy function
+...     global nops
+...     nops += 1000
+...     return [x + i for i in range(500)]
+...
+>>> def f3(x):
+...     global nops
+...     nops += 1
+...     return sum(x) / len(x)
+...
+>>> nops = 0
+>>> arr = list(range(500))
+>>> res = [f1(x) for x in arr]
+>>> res = [f2(x) for x in res]  # this takes a lot of place
+>>> res = [f3(x) for x in res]
+>>> print(res[2])
+252.5
+>>> print(nops)
+501000
+>>>
+>>> nops = 0
+>>> arr = list(range(500))
+>>> res = lproc.rmap(f1, arr)
+>>> res = lproc.rmap(f2, res)
+>>> res = lproc.rmap(f3, res)
+>>> print(res[2])
+252.5
+>>> print(nops)
+1002
 
 
 Similar libraries
