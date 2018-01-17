@@ -70,14 +70,14 @@ class Concatenation(Sequence):
                 self.sequences.append(s)
 
         self.offsets = array.array('L', [0] + [len(s) for s in sequences])
-        for i in range(1, len(sequences)):
+        for i in range(1, len(sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
     def __len__(self):
         return self.offsets[-1]
 
     def __getitem__(self, item):
-        if not 0 < item < len(self):
+        if not 0 <= item < len(self):
             raise IndexError("index out of range")
 
         s = bisect.bisect(self.offsets, item) - 1
@@ -206,7 +206,7 @@ def par_iter(sequence, nprocs=0):
     .. warning::
         This function uses sub-processes to achieve concurrency, any exception
         raised while reading source elements will be signaled by an
-        :class:`AccessException` raised by this function.
+        :class:`lproc.AccessException` raised by this function.
 
     .. note::
         Due to the nature of inter-process communication, the computed values
@@ -273,7 +273,6 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
     offset = 0
     assert wsem.acquire(blocking=False)  # first block should be available
     while not end_evt.is_set():
-        # noinspection PyBroadException
         try:
             samples = next(sources)
             for s, b in zip(samples, buffers):
@@ -291,7 +290,6 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
 
         except Exception:
             end_evt.set()
-            # noinspection PyBroadException
             try:  # try to send as much picklable information as possible
                 _, ev, tb = sys.exc_info()
                 tb = Traceback(tb)
@@ -305,17 +303,18 @@ def buffer_loader_worker(sources, buffers, chunk_size: int,
     end_data.put(None)
 
 
-def chunk_load(sources, buffers, chunk_size, drop_last=False, pad_last=False):
+def chunk_load(sources, destination, bloc_size,
+               drop_last=False, pad_last=False, use_thread=True):
     """Load elements from iterables into buffers and yield a view every time a
     full chunk is ready. Typically used to generate minibatches from a dataset.
 
     :param sources: Sequence[Iterable]
         The data sources to read from
-    :param buffers: Sequence[Sequence]
+    :param destination: Sequence[Sequence]
         Target storage corresponding to each data source. Buffers must support
         slice-based indexing and must be able to store any element from the
-        source at any location along the forst axis
-    :param chunk_size: int
+        source at any location along the first axis
+    :param bloc_size: int
         How many elements should be loaded before yielding a chunks
     :param drop_last: bool
         Ignore the last chunk if it is smaller than `chunk_size`.
@@ -326,22 +325,48 @@ def chunk_load(sources, buffers, chunk_size, drop_last=False, pad_last=False):
     .. warning::
         This function uses a separate thread to take advantage of any
         inactivity in the main process, any exception raised while reading
-        source elements will be signaled by an :class:`AccessException` raised
-        by this function.
+        source elements will be signaled by an :class:`lproc.AccessException`
+        raised by this function.
     """
 
-    assert(len(sources) == len(buffers))
+    assert(len(sources) == len(destination))
     sources = zip(*sources)
 
-    buffer_size = min([len(b) - len(b) % chunk_size for b in buffers])
-    n_chunks = buffer_size // chunk_size
+    buffer_size = min([len(b) - len(b) % bloc_size for b in destination])
+    n_chunks = buffer_size // bloc_size
 
+    # Simple version not using threads
+    if not use_thread:
+        offset = 0
+        for samples in sources:
+            for s, b in zip(samples, destination):
+                b[offset] = s
+            offset += 1
+            if offset % bloc_size == 0:
+                yield tuple([b[offset - bloc_size:offset]
+                             for b in destination])
+                offset = offset % buffer_size
+
+        if offset % bloc_size != 0 and not drop_last:
+            i1 = offset - offset % bloc_size
+            if pad_last:
+                i2 = i1 + offset
+                for b in destination:
+                    b[offset:i1 + bloc_size] = 0
+            else:
+                i2 = offset
+
+            yield tuple([b[i1:i2] for b in destination])
+
+        return
+
+    # Load data using a separate thread
     rsem, wsem = Semaphore(0), Semaphore(n_chunks)
     end_evt = Event()
     end_data = Queue()
 
     thread = Thread(target=buffer_loader_worker,
-                    args=(sources, buffers, chunk_size,
+                    args=(sources, destination, bloc_size,
                           rsem, wsem, end_evt, end_data))
     thread.start()
 
@@ -349,21 +374,33 @@ def chunk_load(sources, buffers, chunk_size, drop_last=False, pad_last=False):
         offset = 0
         while True:
             rsem.acquire()
-            if end_evt.is_set():
+
+            if not end_evt.is_set():
+                yield tuple([b[offset:offset + bloc_size] for b in destination])
+                offset = (offset + bloc_size) % buffer_size
+                wsem.release()
+
+            elif rsem.acquire(blocking=False):  # not the last block
+                rsem.release()
+                yield tuple([b[offset:offset + bloc_size] for b in destination])
+                offset = (offset + bloc_size) % buffer_size
+                wsem.release()
+
+            else:
                 v = end_data.get()
 
                 if isinstance(v, int) and pad_last:
                     if v == 0:
                         break
-                    for b in buffers:  # blank padded buffer values
+                    for b in destination:  # blank padded buffer values
                         b[offset + v:] = 0
-                    yield tuple([b[offset:offset + chunk_size]
-                                 for b in buffers])
+                    yield tuple([b[offset:offset + bloc_size]
+                                 for b in destination])
                     break
                 elif isinstance(v, int) and not pad_last:
-                    if v == 0 or (drop_last and v < chunk_size):
+                    if v == 0 or (drop_last and v < bloc_size):
                         break
-                    yield tuple([b[offset:offset + v] for b in buffers])
+                    yield tuple([b[offset:offset + v] for b in destination])
                     break
                 elif isinstance(v, tuple):
                     ev, tb = v
@@ -373,11 +410,6 @@ def chunk_load(sources, buffers, chunk_size, drop_last=False, pad_last=False):
                 else:
                     raise AccessException(
                         "Exception raised while reading sources")
-
-            else:
-                yield tuple([b[offset:offset + chunk_size] for b in buffers])
-                offset = (offset + chunk_size) % buffer_size
-                wsem.release()
 
     except:
         raise

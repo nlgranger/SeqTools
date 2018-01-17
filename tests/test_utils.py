@@ -157,41 +157,52 @@ def test_par_iter_errors():
             assert x == y
 
 
-@timed(5)
+@timed(10)
 def test_buffer_loader():
     class SlowDataSource:
         def __init__(self, data):
             self.data = data
 
         def __getitem__(self, item):
+            sleep(0.001)
             return self.data[item]
 
         def __iter__(self):
             for x in self.data:
-                sleep(0.01)
+                sleep(0.001)
                 yield x
 
-    arr = SlowDataSource(range(100))
-    buffer = [0] * 10
+    buffer = [0] * 15
 
+    for d in [0, 5, 99, 100]:
+        arr = SlowDataSource(range(d))
+
+        i = 0
+        for (b,) in chunk_load([arr], [buffer], 5):
+            for k in range(len(b)):
+                if b[k] != arr.data[i + k]:
+                    pass
+
+            i += len(b)
+        assert i == d, "got {} values instead of {}".format(i, d)
+
+        i = 0
+        for (b,) in chunk_load([arr], [buffer], 5, use_thread=False):
+            for k in range(len(b)):
+                assert b[k] == arr.data[i + k]
+
+            i += len(b)
+        assert i == d
+
+    arr = SlowDataSource(range(4000))
     t1 = time()
-    for i, x in enumerate(arr):
-        buffer[i % 5] = x
-        if (i + 1) % 5 == 0:
-            for k in range(5):
-                assert(buffer[k] == arr[i - 4 + k])
-            sleep(0.05)
+    for i, (b,) in enumerate(chunk_load([arr], [buffer], 5)):
+        for k in range(len(b)):
+            assert(b[k] == arr.data[i * 5 + k])
+        sleep(0.01)  # releases GIL, should not slow down reading
     t2 = time()
 
-    t3 = time()
-    for i, (b,) in enumerate(chunk_load([arr], [buffer], 5)):
-        for k in range(5):
-            assert(b[k] == arr[i * 5 + k])
-        sleep(0.05)
-    t4 = time()
-
-    assert abs((t2 - t1) - 2) < 0.2
-    assert abs((t4 - t3) - 1.05) < 0.2
+    assert abs((t2 - t1) - 8.005) < .7, (t2 - t1) - 8.005
 
 
 @timed(5)
@@ -201,9 +212,9 @@ def test_buffer_loader_errors():
     buffer = [0, 0, 0, 0]
 
     with assert_raises(AccessException):
-        for i, (b,) in enumerate(chunk_load([arr], [buffer], chunk_size=2)):
+        for i, (b,) in enumerate(chunk_load([arr], [buffer], bloc_size=2)):
             assert (b[0] == arr[i * 2]) and (b[1] == arr[i * 2 + 1])
 
-    it = chunk_load([arr], [buffer], chunk_size=2)
+    it = chunk_load([arr], [buffer], bloc_size=2)
     next(it)
     del it
