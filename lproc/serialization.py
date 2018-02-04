@@ -8,17 +8,15 @@ import functools
 
 
 class SerializableFunc:
-    """Make a function independant from modifications of the source code.
-
-    .. warning::
-        This is hackish and experimental! Only use with care.
+    """Make a function independent from modifications of the source code.
 
     This decorator alters the serialization hook so that unpickling the
     function will import a backed-up version of the module containing the
     function.
 
-    .. note::
-        Only the source file containing the function is saved and reloaded
+    .. warning::
+        This is a hackish solution where only the source file containing the
+        function is saved, regenerated and reloaded. Use with care.
     """
     def __init__(self, func):
         if isinstance(func, SerializableFunc):

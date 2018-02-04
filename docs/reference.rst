@@ -17,7 +17,6 @@ API Reference
     collate
     subset
     par_iter
-    chunk_load
 
 
 Mapping
@@ -28,22 +27,19 @@ Mapping
 .. autofunction:: rrmap
 
 
-Index manipulation
-------------------
+Index and shape manipulation
+----------------------------
 
 .. autofunction:: concatenate
 .. autofunction:: collate
 .. autofunction:: subset
 
 
-Serialization
--------------
+Evaluation
+----------
 
-At some point, you will want to evaluation the values in your lists, those
-function can help you process large sequences.
-
+.. autofunction:: add_cache
 .. autofunction:: par_iter
-.. autofunction:: chunk_load
 .. autoclass:: SerializableFunc
 
 Errors

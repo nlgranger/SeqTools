@@ -98,7 +98,7 @@ Indexing
 >>> len(y[1:-1])  # known without processing the array
 2
 
-When the requested index is not an integer or a slice, :func:`rmap`
+When the requested index is neither an integer nor a slice, :func:`rmap`
 will delegates indexing to the inner data sequence:
 
 >>> import numpy as np
@@ -133,10 +133,6 @@ selection of indexes.
 
 :func:`par_iter` returns an multiprocessing-enabled iterator over a
 sequence to quickly process an array.
-
-Similarly, :func:`chunk_load` evaluates sequences chunk by chunk and
-loads these into buffers (think minibatch iterator if you come from the Machine
-Learning field).
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?

@@ -1,9 +1,7 @@
+from .evaluation import add_cache, AccessException, par_iter
 from .mapping import rmap, rimap, rrmap
 from .serialization import SerializableFunc
-from .utils import AccessException, add_cache, chunk_load, collate, \
-    concatenate, par_iter, subset
+from .utils import collate, concatenate, subset
 
-
-__all__ = ['rmap', 'rimap', 'rrmap', 'SerializableFunc',
-           'subset', 'add_cache', 'concatenate', 'collate', 'par_iter',
-           'chunk_load']
+__all__ = ['rmap', 'rimap', 'rrmap', 'SerializableFunc', 'collate',
+           'concatenate', 'subset', 'add_cache', 'par_iter']
