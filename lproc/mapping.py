@@ -1,9 +1,7 @@
 import inspect
 from typing import Sequence
-from .common import is_int_item
-
-
-__all__ = ['rmap', 'rimap', 'rrmap']
+from .utils import is_int_item
+from .indexing import Slice
 
 
 class MappingException(Exception):
@@ -11,35 +9,33 @@ class MappingException(Exception):
 
 
 class RMapping(Sequence):
-    def __init__(self, f, *sequence):
+    def __init__(self, f, sequences, debug_msg=None):
         assert callable(f), "f must be callable"
-        assert len(sequence) > 0, "at least one input sample must be provided"
-        self.arrays = sequence
+        assert len(sequences) > 0, "at least one input sample must be provided"
+        self.sequences = sequences
         self.f = f
-        self.creation_stack = [
-            (f, l, m, c[0].strip('\n') if c is not None else '?')
-            for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
+        self.debug_msg = debug_msg
 
     def __len__(self):
-        return len(self.arrays[0])
+        return len(self.sequences[0])
 
     def __getitem__(self, item):
-        if not is_int_item(item):  # delegate indexing to subtype
-            return RMapping(self.f, *list(l[item] for l in self.arrays))
+        if is_int_item(item):
+            try:
+                return self.f(*(l[item] for l in self.sequences))
+
+            except Exception as e:
+                if self.debug_msg is not None:
+                    raise e from MappingException(self.debug_msg)
+                else:
+                    raise
+
+        elif isinstance(item, slice):
+            return Slice(self, item)
 
         else:
-            try:
-                return self.f(*(l[item] for l in self.arrays))
-
-            except Exception as e:  # gracefully report exceptions
-                info_where = "\n".join(
-                    "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
-                    for f, l, m, c in self.creation_stack)
-                info_e = MappingException(
-                    "An exception occured when using the node created at: \n"
-                    + info_where)
-
-                raise e from info_e
+            raise TypeError("RMapping indices must be integer or slices, not "
+                            "{}".format(item.__class__.__name__))
 
 
 def rmap(f, *sequence):
@@ -80,7 +76,14 @@ def rmap(f, *sequence):
     computing now
     [5, 5, 5, 5]
     """
-    return RMapping(f, *sequence)
+    stack = [
+        (f, l, m, c[0].strip('\n') if c is not None else '?')
+        for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
+    debug_msg = "in rmap created at:\n" + "\n".join(
+        "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
+        for f, l, m, c in stack)
+
+    return RMapping(f, sequence, debug_msg)
 
 
 def imap(f, *iterable):
@@ -124,4 +127,11 @@ def rrmap(f, *sequence):
     together and the corresponding items passed as separate arguments to f:
     :code:`[[f(*x) for x in zip(*s)] for s in sequences]`
     """
-    return RMapping(lambda *l: RMapping(f, *l), *sequence)
+    stack = [
+        (f, l, m, c[0].strip('\n') if c is not None else '?')
+        for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
+    debug_msg = "in rrmap created at:\n" + "\n".join(
+        "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
+        for f, l, m, c in stack)
+
+    return RMapping(lambda *l: RMapping(f, l, debug_msg), sequence)

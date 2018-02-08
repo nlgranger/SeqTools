@@ -77,7 +77,7 @@ results are stored for only one element at a time:
 >>> y2[2]
 2.0
 >>> # whereas explicitely computing the intermediate transformation
->>> # requires sizeof(float) * 10000 * 2000
+>>> # takes sizeof(float) * 10000 * 2000
 >>> y3 = [f(x) for x in l]
 >>> y4 = [g(x) for x in y3]
 >>> y4[2]
@@ -87,7 +87,8 @@ results are stored for only one element at a time:
 Indexing
 --------
 
-:func:`rmap` tries to preserve the simplicity of slice-based indexing:
+most functions in this library including :func:`rmap` try to preserve the
+simplicity of slice-based indexing:
 
 >>> l = [3, 5, 1, 4]
 >>> y = rmap(lambda x: x * 2, l)
@@ -95,17 +96,11 @@ Indexing
 [10, 2]
 >>> len(y)
 4
->>> len(y[1:-1])  # known without processing the array
+>>> len(y[1:-1])  # y values still aren't computed
 2
 
-When the requested index is neither an integer nor a slice, :func:`rmap`
-will delegates indexing to the inner data sequence:
-
->>> import numpy as np
->>> arr = np.arange(5)
->>> y = rmap(lambda x: x * 2, arr)
->>> list(y[[1, 3, 4]])  #  ~= list(map(lambda x: x * 2, arr[1, 3, 4]))
-[2, 6, 8]
+If you need a more specific form of indexing, take a look at :func:`reindex`
+or :func:`cycle`.
 
 
 Multivariate mapping
@@ -128,11 +123,8 @@ For datasets with a second level of indirection such as an array of arrays
 or an array of iterables, one can use :func:`rrmap` and
 :func:`rimap` respectively.
 
-:func:`subset` lets one manipulate a subset of a sequence based on a
-selection of indexes.
-
-:func:`par_iter` returns an multiprocessing-enabled iterator over a
-sequence to quickly process an array.
+:func:`eager_iter` returns an iterator over a sequence but uses multiple
+workers to compute the values more quickly.
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?

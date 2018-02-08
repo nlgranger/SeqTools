@@ -1,9 +1,6 @@
 import random
-from nose.tools import assert_raises
+import pytest
 from lproc import rmap, rimap, rrmap
-
-
-random.seed(42)
 
 
 def test_rmap_basics():
@@ -27,57 +24,49 @@ def test_rmap_basics():
     assert all(r == d + 1 for r, d in zip(result, data))
 
 
-def test_rmap_not_assignable():
-    n = 100
-    data = [random.random() for _ in range(n)]
-    result = rmap(lambda x: x, data)
-    with assert_raises(Exception):
-        result[0] = 4
-
-
-def test_rmap_special_indexing():
-    n = 100
-    data = [random.random() for _ in range(n)]
-    result = rmap(lambda x: x * 2, data)
-    expected = [x * 2 for x in data]
-
-    # slicing
-    assert all(x == y
-               for x, y in zip(result[2:25:3], expected[2:25:3]))
-
-    # delegated indexing
-    class Container:
-        def __init__(self, data):
-            self.data = data
-
-        def __len__(self):
-            return n
-
-        def __getitem__(self, item):
-            try:
-                len(item)
-                return [self.data[i] for i in item]
-            except TypeError:
-                return self.data[item]
-
-    c = Container(data)
-    m = rmap(lambda x: x * 2, c)
-    idx = [random.randint(0, n) for _ in range(25)]
-    assert all(v == data[i] * 2 for v, i in zip(m[idx], idx))
+# def test_rmap_special_indexing():
+#     n = 100
+#     data = [random.random() for _ in range(n)]
+#     result = rmap(lambda x: x * 2, data)
+#     expected = [x * 2 for x in data]
+#
+#     # slicing
+#     assert all(x == y
+#                for x, y in zip(result[2:25:3], expected[2:25:3]))
+#
+#     # delegated indexing
+#     class Container:
+#         def __init__(self, data):
+#             self.data = data
+#
+#         def __len__(self):
+#             return n
+#
+#         def __getitem__(self, item):
+#             try:
+#                 len(item)
+#                 return [self.data[i] for i in item]
+#             except TypeError:
+#                 return self.data[item]
+#
+#     c = Container(data)
+#     m = rmap(lambda x: x * 2, c)
+#     idx = [random.randint(0, n) for _ in range(25)]
+#     assert all(v == data[i] * 2 for v, i in zip(m[idx], idx))
 
 class CustomException(Exception):
     pass
 
-def test_rmap_exceptions():
-    n = 100
 
+def test_rmap_exceptions():
     def do(x):
+        del x
         raise CustomException
 
-    data = [random.random() for _ in range(n)]
+    data = [random.random() for _ in range(100)]
     m = rmap(do, data)
-    with assert_raises(CustomException):
-        _ = m[0]
+    with pytest.raises(CustomException):
+        print(m[0])
 
 
 def test_rimap_basics():

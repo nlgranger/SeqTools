@@ -9,7 +9,7 @@ setup(
     license="MPL2",
     url="https://github.com/nlgranger/LazyProc",
     packages=['lproc'],
-    version='0.5',
+    version='0.6',
     install_requires=[
         'tblib',
         'typing;python_version<"3.6"'

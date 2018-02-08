@@ -13,5 +13,5 @@ or from the source repository instead:
 
    pip install git+https://github.com/nlgranger/LazyProc.git
 
-Many elements are reusable independantly, you can take some directly from the
-source code at https://github.com/nlgranger/LazyProc.
+Many elements are reusable independantly, you can pick what you need directly
+from the source code at https://github.com/nlgranger/LazyProc.

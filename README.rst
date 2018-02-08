@@ -11,10 +11,10 @@
 LazyProc
 ========
 
-TLDR; Like python's map but you can also use indexing on the result.
+TLDR; Like python's itertools but with lazy evaluation on indexable sequences.
 
-This library provides simple helper functions for lazy evaluation of indexable
-objects such as lists. It can be used to design and evaluate chained
+This library provides simple helper functions for lazy evaluation of sequences
+such as lists. It can be used to quickly design and evaluate chained
 transformations pipelines.
 
 Lazy evaluation is easily understood by looking an example:
@@ -31,9 +31,10 @@ Lazy evaluation is easily understood by looking an example:
 3
 
 Because of delayed execution, intermediate values for chained transformations
-need not be computed and stored unless explicitly required. As a result,
-memory usage remains as low as possible but it is still possible to probe
-intermediate values.
+need not be computed and stored unless explicitly required. As a result you
+can evaluate a whole pipeline of transformations for each item without storing
+intermediate results, but you can also probe intermediate values to test
+your pipeline.
 
 >>> def f1(x):
 ...     return x + 1
@@ -46,19 +47,26 @@ intermediate values.
 ...     return sum(x) / len(x)
 ...
 >>> arr = list(range(5000))
+
+Defining and using the pipeline:
+
 >>> tmp1 = lproc.rmap(f1, arr)
 >>> tmp2 = lproc.rmap(f2, tmp1)
 >>> res = lproc.rmap(f3, tmp2)
->>> print(res[2])
+>>> print(res[2])  # request output for a single value
 252.5
+>>> print(tmp1[2])  # probe a single value
+3
 
 Compare to:
 
 >>> tmp1 = [f1(x) for x in arr]
->>> tmp2 = [f2(x) for x in tmp1]  # this will take a lot of time and memory
+>>> tmp2 = [f2(x) for x in tmp1]  # this will take a lot of memory and time
 >>> res = [f3(x) for x in tmp2]
->>> print(res[2])
+>>> print(res[2])  # requires to have all other values computed
 252.5
+>>> print(tmp1[2])  # requires to keep all other values in memory
+3
 
 
 Installation

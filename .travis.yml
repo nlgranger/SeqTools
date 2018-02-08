@@ -3,15 +3,24 @@ cache: pip
 python:
   - '3.6'
 install:
+  - pip install -U pip wheel
   - pip install -e .
-  - pip install numpy
   - pip install nose
-  - pip install coverage
+  - pip install pytest pytest-cov pytest-timeout
   - pip install codacy-coverage
   - pip install sphinx
   - pip install sphinx_rtd_theme
 script:
-  - nosetests --with-coverage --cover-xml --cover-package=lproc
+  - py.test --cov-report=xml --cov=lproc tests/
   - python -m sphinx -M doctest docs docs/_build
 after_success:
   - python-codacy-coverage -r coverage.xml
+deploy:
+  provider: pypi
+  user: $PYPI_USER
+  password: $PYPI_PASS
+  skip_cleanup: true
+  on:
+    tags: true
+    branch: master
+    python: "3.6"

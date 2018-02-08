@@ -1,4 +1,6 @@
 import multiprocessing
+import threading
+import queue
 import pickle as pkl
 import sys
 from collections import OrderedDict
@@ -41,109 +43,138 @@ def add_cache(arr, cache_size=1):
     return CachedSequence(arr, cache_size)
 
 
-class AccessException(RuntimeError):
+class EagerAccessException(RuntimeError):
     pass
 
 
-class ParIterWorker:
-    def __init__(self, sequence, q_in, q_out):
-        self.sequence = sequence
-        self.q_in = q_in
-        self.q_out = q_out
-        self.p = multiprocessing.Process(target=self.do)
-        self.p.start()
+def iter_worker(sequence, q_in, q_out):
+    while True:
+        si = q_in.get()
+        if si is None:  # stop on sentinel value
+            return
 
-    def do(self):
-        while True:
-            i = self.q_in.get()
-            if i is None:  # stop on sentinel value
+        try:
+            v = sequence[si]
+
+        except Exception:
+            ev, tb = None, None
+            try:  # try to add information
+                _, ev_, tb_ = sys.exc_info()
+                ev = pkl.loads(pkl.dumps(ev_))
+                tb = pkl.loads(pkl.dumps(Traceback(tb_)))
+
+            except Exception:  # nothing more we can do
+                pass
+
+            finally:
+                q_out.put((None, (si, ev, tb)))
                 return
 
-            try:
-                v = self.sequence[i]
-
-            except:
-                try:  # try to send as much picklable information as possible
-                    _, ev, tb = sys.exc_info()
-                    tb = Traceback(tb)
-                    pkl.dumps((ev, tb))  # Check picklable
-                    self.q_out.put((None, (i, ev, tb)))
-                except:  # nothing more we can do
-                    self.q_out.put((None, (i, None, None)))
-
-            else:
-                self.q_out.put((i, v))
-
-    def join(self):
-        self.p.join()
+        else:
+            q_out.put((si, v))
 
 
-def par_iter(sequence, nprocs=0):
-    """Return an iterator which fetches values ahead using separate
-    subprocesses.
+def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
+    """Return an iterator over the sequence backed by multiple workers in order
+    to fetch values ahead.
 
     :param sequence:
-        the sequence to iterate over
-    :param nprocs:
-        Number of workers to use. 0 or negative values indicate the number of
-        CPU cores to spare. Default: 0 (one worker by cpu core)
+        a sequence of values to iterate over
+    :param nworkers:
+        number of workers, or number of cpu cores if set to `None`
+    :param max_buffered:
+        maximum number of values waiting to be consumed, set to `None` to
+        remove the limit
+    :param method:
+        type of workers:
 
-    This function uses sub-processes to achieve concurrency, any exception
-    raised while reading source elements will be signaled by an
-    :class:`lproc.AccessException` raised by this function.
+        - `'thread'` uses `threading.Thread` which is prefereable when many
+          operations realeasing the GIL such as IO operations are involved.
+          However only one thread is active at any given time
+        - `'proc'` uses `multiprocessing.Process` which provides full
+          parallelism but induces extra cpu and memory operations because the
+          results must be serialized and copied from the workers back to main
+          thread.
 
     .. note::
-        Due to the nature of inter-process communication, the computed values
-        must be serialized before being returned to the main thread therefore
-        incurring a computation and communication overhead.
+        Exceptions raised in the workers while accessing the sequence values
+        will trigger an :class:`EagerAccessException`. When possible,
+        information on the cause of failure will be provided in the exception
+        message.
     """
+    nworkers = multiprocessing.cpu_count() if nworkers is None else nworkers
+    max_buffered = len(sequence) if max_buffered is None else max_buffered
+    nworkers = min(nworkers, max_buffered)
 
-    if nprocs <= 0:
-        nprocs += multiprocessing.cpu_count()
+    if method == 'thread':
+        q_in = queue.Queue(max_buffered)
+        q_out = queue.Queue(max_buffered)
 
-    q_in = multiprocessing.Queue(2 * nprocs)
-    q_out = multiprocessing.Queue(2 * nprocs)
-    unordered_results = {}  # temporary storage for results
+    elif method == 'proc':
+        q_in = multiprocessing.Queue(max_buffered)
+        q_out = multiprocessing.Queue(max_buffered)
 
-    proc = [ParIterWorker(sequence, q_in, q_out) for _ in range(nprocs)]
+    else:
+        raise ValueError('invalid value for method')
 
-    n_injected = 0
-    n_done = 0
+    buffer = [None] * max_buffered  # storage for result values
+    done = [False] * max_buffered
+    n = len(sequence)
+    workers = []
 
     try:
-        while n_done < len(sequence):
-            # inject arguments
-            while n_injected < len(sequence) and q_in.qsize() < nprocs:
-                q_in.put(n_injected)
-                n_injected += 1
+        if method == 'thread':
+            for _ in range(nworkers):
+                workers.append(threading.Thread(
+                    target=iter_worker, args=(sequence, q_in, q_out)))
+        else:
+            for _ in range(nworkers):
+                workers.append(multiprocessing.Process(
+                    target=iter_worker, args=(sequence, q_in, q_out)))
 
-            idx, v = q_out.get()
+        for w in workers:
+            w.start()
 
-            if idx is None:
-                i, ev, tb = v
+        for j in range(min(max_buffered, n)):
+            q_in.put(j)
+
+        i = 0  # sequence index
+        while i < n:
+            si_, v = q_out.get()
+
+            if si_ is None:
+                si_, ev, tb = v
+
                 if ev is not None:
-                    raise AccessException(
-                        "Accessing index {} failed".format(i)) \
+                    raise EagerAccessException(
+                        "failed to get item {}".format(si_)) \
                         from ev.with_traceback(tb.as_traceback())
+
                 else:
-                    raise AccessException(
-                        "Accessing index {} failed".format(i))
+                    raise EagerAccessException(
+                        "failed to get item {}".format(si_))
 
-            else:
-                unordered_results[idx] = v
+            buffer[si_ % max_buffered] = v
+            done[si_ % max_buffered] = True
 
-                # return them in correct order
-                while n_done in unordered_results.keys():
-                    yield unordered_results.pop(n_done)
-                    n_done += 1
+            # Return computed values
+            while done[i % max_buffered]:
+                yield buffer[i % max_buffered]
+                done[i % max_buffered] = False
 
-    except:
-        raise
+                # schedule next value in released slot
+                if i + max_buffered < n:
+                    q_in.put(i + max_buffered)
 
-    finally:  # make sure threads are stopped in all cases
+                i += 1
+
+    except Exception as e:
+        raise e
+
+    finally:  # make sure workers are stopped in all cases
         while not q_out.empty():  # drain active jobs
             q_out.get()
-        for _ in range(nprocs):  # inject sentinel values to stop threads
+        for _ in range(nworkers):  # inject sentinel values
             q_in.put(None)
-        for p in proc:
+        for p in workers:  # wait for termination
             p.join()

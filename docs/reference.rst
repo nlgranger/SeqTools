@@ -9,14 +9,16 @@ API Reference
 =============
 
 .. autosummary::
-
     rmap
     rimap
     rrmap
-    concatenate
     collate
-    subset
-    par_iter
+    concatenate
+    cycle
+    reindex
+    add_cache
+    eager_iter
+    EagerAccessException
 
 
 Mapping
@@ -27,22 +29,23 @@ Mapping
 .. autofunction:: rrmap
 
 
-Index and shape manipulation
-----------------------------
+Indexing and reshaping
+----------------------
 
 .. autofunction:: concatenate
 .. autofunction:: collate
-.. autofunction:: subset
+.. autofunction:: cycle
+.. autofunction:: reindex
 
 
 Evaluation
 ----------
 
 .. autofunction:: add_cache
-.. autofunction:: par_iter
+.. autofunction:: eager_iter
 .. autoclass:: SerializableFunc
 
 Errors
 ------
 
-.. autoclass:: AccessException
+.. autoclass:: EagerAccessException
