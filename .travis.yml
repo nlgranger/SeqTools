@@ -9,7 +9,6 @@ install:
   - pip install pytest pytest-cov pytest-timeout
   - pip install codacy-coverage
   - pip install sphinx
-  - pip install sphinx_rtd_theme
 script:
   - py.test --cov-report=xml --cov=lproc tests/
   - python -m sphinx -M doctest docs docs/_build
