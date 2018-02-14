@@ -7,7 +7,7 @@ from collections import OrderedDict
 from typing import Sequence
 from tblib import Traceback
 
-from .common import isint, SliceView
+from .common import basic_getitem, basic_setitem
 
 
 class CachedSequence(Sequence):
@@ -19,62 +19,22 @@ class CachedSequence(Sequence):
     def __len__(self):
         return len(self.sequence)
 
+    @basic_getitem
     def __getitem__(self, key):
-        if isinstance(key, slice):
-            return SliceView(self, key)
-
-        elif isint(key):
-            if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
-
-            if key < 0:
-                key = len(self) + key
-
-            if key in self.cache.keys():
-                return self.cache[key]
-            else:
-                value = self.sequence[key]
-                if len(self.cache) >= self.cache_size:
-                    self.cache.popitem()
-                self.cache[key] = value
-                return value
-
+        if key in self.cache.keys():
+            return self.cache[key]
         else:
-            raise TypeError(
-                self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+            value = self.sequence[key]
+            if len(self.cache) >= self.cache_size:
+                self.cache.popitem()
+            self.cache[key] = value
+            return value
 
+    @basic_setitem
     def __setitem__(self, key, value):
-        if isinstance(key, slice):
-            slice_view = SliceView(self, key)
-
-            if len(slice_view) != len(value):
-                raise ValueError(self.__class__.__name__ + " only support "
-                                 "one-to-one assignment")
-
-            for i, v in enumerate(value):
-                slice_view[i] = v
-                j = slice_view.start + slice_view.step * i
-                if j in self.cache.keys():
-                    self.cache[j] = v
-
-        elif isint(key):
-            if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
-
-            if key < 0:
-                key = len(self) + key
-
-            self.sequence[key] = value
-            if key in self.cache.keys():
-                self.cache[key] = value
-
-        else:
-            raise TypeError(
-                self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+        self.sequence[key] = value
+        if key in self.cache.keys():
+            self.cache[key] = value
 
     def __iter__(self):
         # Bypass cache as it will be useless
@@ -106,16 +66,16 @@ def iter_worker(sequence, q_in, q_out):
             v = sequence[si]
 
         except Exception:
-            ev, tb = None, None
             try:  # try to add information
-                _, ev_, tb_ = sys.exc_info()
-                ev = pkl.loads(pkl.dumps(ev_))
-                tb = pkl.loads(pkl.dumps(Traceback(tb_)))
+                _, ev, tb = sys.exc_info()
+                ev = pkl.loads(pkl.dumps(ev))
+                tb = pkl.loads(pkl.dumps(Traceback(tb)))
 
             except Exception:  # nothing more we can do
-                pass
+                q_out.put((None, (si, None, None)))
+                return
 
-            finally:
+            else:
                 q_out.put((None, (si, ev, tb)))
                 return
 

@@ -33,6 +33,62 @@ def normalize_slice(item, n):
     return slice(start, stop, step)
 
 
+def basic_getitem(f):
+    """decorator for a sane defaults implementation of __getitem__ that calls
+    the actual implementation on integer keys in range 0 to len(self).
+    """
+    def getitem(self, key):
+        if isinstance(key, slice):
+            return SliceView(self, key)
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            return f(self, key)
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    return getitem
+
+
+def basic_setitem(f):
+    def setitem(self, key, value):
+        if isinstance(key, slice):
+            slice_view = SliceView(self, key)
+
+            if len(slice_view) != len(value):
+                raise ValueError("SliceView only support one-to-one "
+                                 "assignment")
+
+            for i, v in enumerate(value):
+                slice_view[i] = v
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            f(self, key, value)
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    return setitem
+
+
 class SliceView(Sequence):
     def __init__(self, sequence, key):
         if isinstance(sequence, SliceView):
@@ -53,47 +109,10 @@ class SliceView(Sequence):
     def __len__(self):
         return abs(self.stop - self.start) // abs(self.step)
 
+    @basic_getitem
     def __getitem__(self, key):
-        if isinstance(key, slice):
-            return SliceView(self, key)
+        return self.sequence[self.start + key * self.step]
 
-        elif isint(key):
-            if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
-
-            if key < 0:
-                key = len(self) + key
-
-            return self.sequence[self.start + key * self.step]
-
-        else:
-            raise TypeError(
-                self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
-
+    @basic_setitem
     def __setitem__(self, key, value):
-        if isinstance(key, slice):
-            slice_view = SliceView(self, key)
-
-            if len(slice_view) != len(value):
-                raise ValueError("SliceView only support one-to-one "
-                                 "assignment")
-
-            for i, v in enumerate(value):
-                slice_view[i] = v
-
-        elif isint(key):
-            if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
-
-            if key < 0:
-                key = len(self) + key
-
-            self.sequence[self.start + key * self.step] = value
-
-        else:
-            raise TypeError(
-                self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+        self.sequence[self.start + key * self.step] = value

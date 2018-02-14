@@ -1,7 +1,6 @@
 import inspect
 from typing import Sequence
-from .common import isint
-from lproc.common import SliceView
+from lproc.common import basic_getitem
 
 
 class MappingException(Exception):
@@ -19,23 +18,16 @@ class RMapping(Sequence):
     def __len__(self):
         return len(self.sequences[0])
 
+    @basic_getitem
     def __getitem__(self, item):
-        if isint(item):
-            try:
-                return self.f(*(l[item] for l in self.sequences))
+        try:
+            return self.f(*(l[item] for l in self.sequences))
 
-            except Exception as e:
-                if self.debug_msg is not None:
-                    raise e from MappingException(self.debug_msg)
-                else:
-                    raise
-
-        elif isinstance(item, slice):
-            return SliceView(self, item)
-
-        else:
-            raise TypeError("RMapping indices must be integer or slices, not "
-                            "{}".format(item.__class__.__name__))
+        except Exception as e:
+            if self.debug_msg is not None:
+                raise e from MappingException(self.debug_msg)
+            else:
+                raise
 
     def __iter__(self):
         for args in zip(*self.sequences):
