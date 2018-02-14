@@ -1,7 +1,7 @@
 import inspect
 from typing import Sequence
-from .utils import is_int_item
-from .indexing import Slice
+from .common import isint
+from lproc.common import SliceView
 
 
 class MappingException(Exception):
@@ -20,7 +20,7 @@ class RMapping(Sequence):
         return len(self.sequences[0])
 
     def __getitem__(self, item):
-        if is_int_item(item):
+        if isint(item):
             try:
                 return self.f(*(l[item] for l in self.sequences))
 
@@ -31,11 +31,22 @@ class RMapping(Sequence):
                     raise
 
         elif isinstance(item, slice):
-            return Slice(self, item)
+            return SliceView(self, item)
 
         else:
             raise TypeError("RMapping indices must be integer or slices, not "
                             "{}".format(item.__class__.__name__))
+
+    def __iter__(self):
+        for args in zip(*self.sequences):
+            try:
+                yield self.f(*args)
+
+            except Exception as e:
+                if self.debug_msg is not None:
+                    raise e from MappingException(self.debug_msg)
+                else:
+                    raise
 
 
 def rmap(f, *sequence):
@@ -44,12 +55,8 @@ def rmap(f, *sequence):
     Lazy version of :code:`[f(x) for x in sequence]`.
 
     If several sequences are passed, they will be zipped together and items
-    from eachs will be passed as distinct arguments to f:
+    from each will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
-
-    Only integer indexing is handled directly, other forms of indexing (slices,
-    list of integers...) are delegated to wrapped sequence(s). If this is
-    undesirable, you may want to use :func:`lproc.subset` instead.
 
     Example:
 

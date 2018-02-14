@@ -1,71 +1,7 @@
 from typing import Sequence, Iterable
 from itertools import count
 
-from .utils import is_int_item
-
-
-class Slice(Sequence):
-    @staticmethod
-    def normalize_slice(item, n):
-        start, stop, step = item.start, item.stop, item.step
-        start = 0 if start is None else start
-        stop = n if stop is None else stop
-        step = 1 if step is None else step
-
-        if start < -n or start >= n or stop < -n - 1 or stop > n:
-            raise IndexError("Slice limits out of range")
-        if step == 0:
-            raise ValueError("Slice step cannot be 0")
-
-        start = n + start if start < 0 else start
-        stop = n + stop if stop < 0 else stop
-
-        if (stop - start) * step <= 0:
-            return slice(0, 0, 1)
-
-        if step > 0:
-            stop += (step + stop - start) % step
-        else:
-            stop -= (-step + start - stop) % -step
-
-        return slice(start, stop, step)
-
-    def __init__(self, sequence, slice):
-        self.sequence = sequence
-        slice = Slice.normalize_slice(slice, len(sequence))
-        self.start = slice.start
-        self.stop = slice.stop
-        self.step = slice.step
-
-    def __len__(self):
-        return abs(self.stop - self.start) // abs(self.step)
-
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            item = Slice.normalize_slice(item, len(self))
-            start = self.start + item.start * self.step
-            stop = self.start + item.stop * self.step
-            if start > len(self.sequence) or stop > len(self.sequence):
-                raise IndexError("Slice slice index out of range")
-            step = item.step * self.step
-            new_slice = Slice.normalize_slice(slice(start, stop, step),
-                                              len(self.sequence))
-            return Slice(self.sequence, new_slice)
-
-        elif is_int_item(item):
-            if item < -len(self) or item >= len(self):
-                raise IndexError("index out of range")
-
-            if item < 0:
-                item = len(self) + item
-
-            item = self.start + item * self.step
-
-            return self.sequence[item]
-
-        else:
-            raise TypeError("Slice indices must be intergers or slices, not"
-                            "{}".format(item.__clas__.__name__))
+from .common import isint, SliceView
 
 
 class Reindexing(Sequence):
@@ -74,6 +10,7 @@ class Reindexing(Sequence):
             try:  # let the index type handle sub-indexing if possible
                 indexes = sequence.indexes[indexes]
             except Exception:
+                # todo: optimize with array
                 indexes = [sequence.indexes[i] for i in indexes]
 
             sequence = sequence.sequence
@@ -84,11 +21,50 @@ class Reindexing(Sequence):
     def __len__(self):
         return len(self.indexes)
 
-    def __getitem__(self, item):
-        if is_int_item(item):
-            return self.sequence[self.indexes[item]]
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return Reindexing(self.sequence, self.indexes[key])
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            return self.sequence[self.indexes[key]]
+
         else:
-            return Reindexing(self, item)
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            indexes = self.indexes[key]
+
+            if len(indexes) != len(value):
+                raise ValueError(self.__class__.__name__ + " only support "
+                                 "one-to-one assignment")
+
+            for i, v in zip(indexes, value):
+                self.sequence[i] = v
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            self.sequence[self.indexes[key]] = value
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
 
 
 def reindex(sequence, indexes):
@@ -104,19 +80,49 @@ class Cycle(Sequence):
     def __len__(self):
         return self.size
 
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            return Slice(self, item)
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return SliceView(self, key)
 
-        elif not is_int_item(item):
-            raise TypeError("Cycle indices must be integers or slices, not "
-                            "{}".format(item.__class__.__name__))
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
 
-        elif item < -self.size or item >= self.size:
-            raise IndexError("Cycle index out of range")
+            if key < 0:
+                key = len(self) + key
+
+            return self.sequence[key % len(self.sequence)]
 
         else:
-            return self.sequence[item % len(self.sequence)]
+            raise TypeError("Cycle indices must be integers or slices, not "
+                            "{}".format(key.__class__.__name__))
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            slice_view = SliceView(self, key)
+
+            if len(slice_view) != len(value):
+                raise ValueError(self.__class__.__name__ + " only support "
+                                 "one-to-one assignment")
+
+            for i, v in enumerate(value):
+                slice_view[i] = v
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            self.sequence[key % len(self.sequence)] = value
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
 
     def __iter__(self):
         for i in range(self.size):
@@ -127,30 +133,35 @@ class InfiniteCycle(Iterable):
     def __init__(self, sequence):
         self.sequence = sequence
 
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            start, stop, step = item.start, item.stop, item.step
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start, stop, step = key.start, key.stop, key.step
 
             if start is None:
                 start = 0
 
             if start < 0 or stop is None or stop < 0:
-                raise ValueError("InfiniteCycle has no end")
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
 
             offset = start - start % len(self.sequence)
             start -= offset
             stop -= offset
             return Cycle(self.sequence, stop)[start:stop:step]
 
-        elif not is_int_item(item):
-            raise TypeError("InfiniteCycle indices must be integers or "
-                            "slices, not {}".format(item.__class__.__name__))
+        elif isint(key):
+            if key < 0:
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
 
-        elif item < 0:
-            raise IndexError("InfiniteCycle does not support negative indexing")
+            return self.sequence[key % len(self.sequence)]
 
         else:
-            return self.sequence[item % len(self.sequence)]
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
 
     def __iter__(self):
         for i in count():

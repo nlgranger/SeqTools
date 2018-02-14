@@ -1,27 +1,32 @@
 .. toctree::
    :hidden:
-   :maxdepth: 3
+   :includehidden:
 
    installation
    tutorial
    reference
+   examples
 
 
 .. testsetup::
 
    import lproc
+   import time
 
 
 LazyProc
 ========
 
-TLDR; Like python's itertools but with lazy evaluation on indexable sequences.
+TLDR; Like python's itertools but for index based access with lazy evaluation.
 
-This library provides simple helper functions for lazy evaluation of sequences
-such as lists. It can be used to quickly design and evaluate chained
-transformations pipelines.
+This library is designed to facilitate the manipulation and transformation of
+sequences (anything that supports `__getitem__` such as lists). It was
+concieved with **lazy evaluation** in mind to help setup and test chained
+transformations pipelines very quickly. It also supports **slice based
+indexing** and **item assignment** when possible so that you can forget that
+you are not working with lists!
 
-Lazy evaluation is easily understood by looking an example:
+Lazy evaluation is easily understood by looking at this example:
 
 >>> def do(x):
 ...     print("-> computing now")
@@ -35,42 +40,45 @@ Lazy evaluation is easily understood by looking an example:
 3
 
 Because of delayed execution, intermediate values for chained transformations
-need not be computed and stored unless explicitly required. As a result you
-can evaluate a whole pipeline of transformations for each item without storing
-intermediate results, but you can also probe intermediate values to test
-your pipeline.
+need not be computed and stored unless explicitly required. As a result:
+
+- a full transformation pipeline is declared without delay
+- end-results can be computed without running computation for other items and
+  storing unneeded data.
+- intermediate transformation results are easily accessible for testing
 
 >>> def f1(x):
 ...     return x + 1
 ...
 >>> def f2(x):
 ...     # This is slow and memory heavy
+...     time.sleep(.01)
 ...     return [x + i for i in range(500)]
 ...
 >>> def f3(x):
 ...     return sum(x) / len(x)
 ...
->>> arr = list(range(5000))
+>>> arr = list(range(1000))
+
+Without delayed evaluation:
+
+>>> tmp1 = [f1(x) for x in arr]
+>>> tmp2 = [f2(x) for x in tmp1]  # takes 10 seconds and a lot of memory
+>>> res = [f3(x) for x in tmp2]
+>>> print(res[2])
+252.5
+>>> print(max(tmp2[2]))  # requires to store 499 500 useless values along
+502
 
 Defining and using the pipeline:
 
 >>> tmp1 = lproc.rmap(f1, arr)
 >>> tmp2 = lproc.rmap(f2, tmp1)
 >>> res = lproc.rmap(f3, tmp2)
->>> print(res[2])  # request output for a single value
+>>> print(res[2])  # takes 0.01 seconds
 252.5
->>> print(tmp1[2])  # probe a single value
-3
-
-Compare to:
-
->>> tmp1 = [f1(x) for x in arr]
->>> tmp2 = [f2(x) for x in tmp1]  # this will take a lot of memory and time
->>> res = [f3(x) for x in tmp2]
->>> print(res[2])  # requires to have all other values computed
-252.5
->>> print(tmp1[2])  # requires to keep all other values in memory
-3
+>>> print(max(tmp2[2]))  # probe a single value on demand
+502
 
 
 Similar libraries

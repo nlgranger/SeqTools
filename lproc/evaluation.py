@@ -5,31 +5,80 @@ import pickle as pkl
 import sys
 from collections import OrderedDict
 from typing import Sequence
-
 from tblib import Traceback
+
+from .common import isint, SliceView
 
 
 class CachedSequence(Sequence):
-    def __init__(self, arr, cache_size=1):
-        self.arr = arr
+    def __init__(self, sequence, cache_size=1):
+        self.sequence = sequence
         self.cache = OrderedDict()
         self.cache_size = cache_size
 
     def __len__(self):
-        return len(self.arr)
+        return len(self.sequence)
 
-    def __getitem__(self, item):
-        if item in self.cache:
-            return self.cache[item]
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return SliceView(self, key)
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            if key in self.cache.keys():
+                return self.cache[key]
+            else:
+                value = self.sequence[key]
+                if len(self.cache) >= self.cache_size:
+                    self.cache.popitem()
+                self.cache[key] = value
+                return value
+
         else:
-            value = self.arr[item]
-            if len(self.cache) >= self.cache_size:
-                self.cache.popitem()
-            self.cache[item] = value
-            return value
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            slice_view = SliceView(self, key)
+
+            if len(slice_view) != len(value):
+                raise ValueError(self.__class__.__name__ + " only support "
+                                 "one-to-one assignment")
+
+            for i, v in enumerate(value):
+                slice_view[i] = v
+                j = slice_view.start + slice_view.step * i
+                if j in self.cache.keys():
+                    self.cache[j] = v
+
+        elif isint(key):
+            if key < -len(self) or key >= len(self):
+                raise IndexError(
+                    self.__class__.__name__ + " index out of range")
+
+            if key < 0:
+                key = len(self) + key
+
+            self.sequence[key] = value
+            if key in self.cache.keys():
+                self.cache[key] = value
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
 
     def __iter__(self):
-        return iter(self.arr)
+        # Bypass cache as it will be useless
+        return iter(self.sequence)
 
 
 def add_cache(arr, cache_size=1):
@@ -81,13 +130,15 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     :param sequence:
         a sequence of values to iterate over
     :param nworkers:
-        number of workers, or number of cpu cores if set to `None`
+        number of workers if positive or number of cpu cores to spare if
+        negative or null, defaults to the number of cpu cores
     :param max_buffered:
         maximum number of values waiting to be consumed, set to `None` to
         remove the limit
     :param method:
         type of workers:
 
+        - `'basic'` reverts back to a simple iterator, for debugging mostly
         - `'thread'` uses `threading.Thread` which is prefereable when many
           operations realeasing the GIL such as IO operations are involved.
           However only one thread is active at any given time
@@ -95,27 +146,42 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
           parallelism but induces extra cpu and memory operations because the
           results must be serialized and copied from the workers back to main
           thread.
+        - a tuple of a specified `queue.Queue`-like type and
+          `threading.Thread`-like type to use.
 
     .. note::
-        Exceptions raised in the workers while accessing the sequence values
-        will trigger an :class:`EagerAccessException`. When possible,
-        information on the cause of failure will be provided in the exception
-        message.
+        Unless the basic method is used, exceptions raised in the workers while
+        reading the sequence values will trigger an
+        :class:`EagerAccessException`. When possible, information on the cause
+        of failure will be provided in the exception message.
     """
-    nworkers = multiprocessing.cpu_count() if nworkers is None else nworkers
+    if nworkers <= 0:
+        nworkers = multiprocessing.cpu_count() - nworkers
     max_buffered = len(sequence) if max_buffered is None else max_buffered
+    if max_buffered < 1:
+        raise ValueError("max_buffered must be at least 1")
+
     nworkers = min(nworkers, max_buffered)
 
     if method == 'thread':
-        q_in = queue.Queue(max_buffered)
-        q_out = queue.Queue(max_buffered)
+        queue_type = queue.Queue
+        worker_type = threading.Thread
 
     elif method == 'proc':
-        q_in = multiprocessing.Queue(max_buffered)
-        q_out = multiprocessing.Queue(max_buffered)
+        queue_type = multiprocessing.Queue
+        worker_type = multiprocessing.Process
+
+    elif method == 'basic':
+        for y in sequence:
+            yield y
+
+        raise StopIteration
 
     else:
-        raise ValueError('invalid value for method')
+        queue_type, worker_type = method
+
+    q_in = queue_type(max_buffered)
+    q_out = queue_type(max_buffered)
 
     buffer = [None] * max_buffered  # storage for result values
     done = [False] * max_buffered
@@ -125,11 +191,11 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     try:
         if method == 'thread':
             for _ in range(nworkers):
-                workers.append(threading.Thread(
+                workers.append(worker_type(
                     target=iter_worker, args=(sequence, q_in, q_out)))
         else:
             for _ in range(nworkers):
-                workers.append(multiprocessing.Process(
+                workers.append(worker_type(
                     target=iter_worker, args=(sequence, q_in, q_out)))
 
         for w in workers:

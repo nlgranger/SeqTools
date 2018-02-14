@@ -1,15 +1,5 @@
 from lproc import reindex, cycle
-from lproc.indexing import Slice
 from random import random, randint
-
-
-def test_slice():
-    arr = [random() for _ in range(100)]
-    len(Slice(list(range(20)), slice(0, 20, 1)))
-    s = Slice(arr, slice(10, 5, -1))
-    assert list(s) == arr[10:5:-1]
-    assert list(s[-1:0:-2]) == arr[10:5:-1][-1:0:-2]
-    assert [s[-i - 1] for i in range(len(s))] == arr[10:5:-1][::-1]
 
 
 def test_reindex():
@@ -21,10 +11,27 @@ def test_reindex():
     assert [reindexed[i] for i in range(len(reindexed))] == expected
     assert [r for r in iter(reindexed)] == expected
 
-    start, stop, step = 15, -25, -2
+    start, stop, step = -15, -25, -2
     assert list(reindexed[start:stop:step]) == expected[start:stop:step]
     assert reindexed[start:stop:step].indexes == idx[start:stop:step]
 
+    arr1 = [random() for _ in range(100)]
+    arr2 = list(arr1)
+    reindexed = reindex(arr1, idx)
+    reindexed[start:stop:step] = list(range(start, stop, step))
+    for i, v in zip(idx[start:stop:step], range(start, stop, step)):
+        arr2[i] = v
+    assert arr1 == arr2
+
+    arr1 = [random() for _ in range(100)]
+    arr2 = list(arr1)
+    idx2 = [1, 2, 3]
+    new_values = [-1, -2, -3]
+    reindexed = reindex(reindex(arr1, idx), idx2)
+    for i in range(3):
+        reindexed[i] = new_values[i]
+        arr2[idx[idx2[i]]] = new_values[i]
+    assert arr1 == arr2
 
 def test_cycle():
     arr = [randint(0, 1000) for _ in range(100)]
@@ -39,3 +46,9 @@ def test_cycle():
     assert [next(it) for _ in range(999)] == [arr[i % 100] for i in range(999)]
     sublooped = looped[3:177:4]
     assert list(sublooped) == [arr[i % 100] for i in range(3, 177, 4)]
+
+    arr = [randint(0, 1000) for _ in range(100)]
+    looped = cycle(arr, 250)
+    looped[50:150] = list(range(0, -100, -1))
+    assert arr[50:] == list(range(0, -50, -1))
+    assert arr[:50] == list(range(-50, -100, -1))

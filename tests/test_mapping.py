@@ -17,42 +17,11 @@ def test_rmap_basics():
     result = rmap(do, data)
     assert len(result) == len(data)
     assert do.call_cnt == 0
-    assert all(result[i] == data[i] + 1 for i in range(n))
+    assert list(result) == [x + 1 for x in data]
     assert do.call_cnt == n
+    assert [result[i] for i in range(len(result))] == [x + 1 for x in data]
+    assert list(result[:]) == [x + 1 for x in data]
 
-    # iteration
-    assert all(r == d + 1 for r, d in zip(result, data))
-
-
-# def test_rmap_special_indexing():
-#     n = 100
-#     data = [random.random() for _ in range(n)]
-#     result = rmap(lambda x: x * 2, data)
-#     expected = [x * 2 for x in data]
-#
-#     # slicing
-#     assert all(x == y
-#                for x, y in zip(result[2:25:3], expected[2:25:3]))
-#
-#     # delegated indexing
-#     class Container:
-#         def __init__(self, data):
-#             self.data = data
-#
-#         def __len__(self):
-#             return n
-#
-#         def __getitem__(self, item):
-#             try:
-#                 len(item)
-#                 return [self.data[i] for i in item]
-#             except TypeError:
-#                 return self.data[item]
-#
-#     c = Container(data)
-#     m = rmap(lambda x: x * 2, c)
-#     idx = [random.randint(0, n) for _ in range(25)]
-#     assert all(v == data[i] * 2 for v, i in zip(m[idx], idx))
 
 class CustomException(Exception):
     pass
@@ -67,6 +36,9 @@ def test_rmap_exceptions():
     m = rmap(do, data)
     with pytest.raises(CustomException):
         print(m[0])
+
+    with pytest.raises(CustomException):
+        next(iter(m))
 
 
 def test_rimap_basics():

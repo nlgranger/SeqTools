@@ -1,0 +1,68 @@
+import array
+import time
+import lproc
+
+
+def process_fn(x):
+    time.sleep(1)
+    return x
+
+
+def preprocess_fn(x):
+    time.sleep(0.2)
+    return x
+
+
+def batch_iter(data, f, buffers, batch_size, drop_last=False, nworkers=0):
+    """Transfer data to buffers and iterate over minibatches.
+
+    :param data:
+        The input sequence
+    :param f:
+        Preprocessing function
+    :param buffers:
+        A preallocated memory space that recieves the elements from data.
+        **if smaller than data, memory slots will be reused**. Must be
+        at least `batch_size` long, the recommended size is `batch_size` \*
+        `nworkers`.
+    :batch_size:
+        The size of the minibatches
+    :drop_last:
+        Wether to drop a final minibatch smaller than `batch_size`
+    :nworkers:
+        number of workers, see :func:`lproc.eager_iter`
+    """
+    preprocessed = lproc.rmap(f, data)
+    data_batches = lproc.batches(preprocessed, batch_size, drop_last)
+    ring_buffers = lproc.cycle(buffers, len(data_batches))
+
+    def batch_copy(source, destination):
+        for i, v in enumerate(source):
+            destination[i] = v
+        return destination
+
+    minibatches = lproc.rmap(batch_copy, data_batches, ring_buffers)
+
+    return lproc.eager_iter(
+        minibatches, nworkers,
+        max_buffered=len(buffers))
+
+
+raw_data = list(range(100))
+batch_size = 10
+
+# Reference
+t1 = time.time()
+for i in range(0, len(raw_data), batch_size):
+    preprocessed = [preprocess_fn(x) for x in raw_data[i:i + batch_size]]
+    process_fn(preprocessed)
+t2 = time.time()
+print("sequential iterator took {:.0f}\"".format(t2 - t1))
+
+# Multithreaded version
+buffers = [array.array('l', [0] * batch_size) for _ in range(5)]
+t1 = time.time()
+for x in batch_iter(raw_data, preprocess_fn, buffers, batch_size, nworkers=4):
+    process_fn(x)
+t2 = time.time()
+print("multithreaded iterator took: {:.0f}\"".format(t2 - t1))

@@ -1,5 +1,10 @@
 .. currentmodule:: lproc
 
+.. testsetup::
+
+   from lproc import *
+
+
 Tutorial
 ========
 
@@ -7,21 +12,15 @@ Simple mapping
 --------------
 
 The most basic (and possibly the most useful) function is :func:`rmap`
-which maps a function to each elements of a container such as a list or an
-array:
-
-.. testsetup::
-
-   from lproc import *
-
+which maps a function to each element of a sequence:
 
 >>> l = [3, 5, 1, 4]
 >>> y = rmap(lambda x: x * 2, l)
 >>> [y[i] for i in range(4)]
 [6, 10, 2, 8]
 
-:func:`rmap` is equivalent to the standard `map` function. To understand the
-effect of lazy evaluation, let's add a notification when the function is
+:func:`rmap` is equivalent to the standard :func:`map` function. To understand
+the effect of lazy evaluation, let's add a notification when the function is
 called:
 
 >>> def f(x):
@@ -42,7 +41,7 @@ processing 4
 
 .. note::
 
-    There is no caching/memoïzation mechanism included, so multiple calls to
+    There is no caching/memoization mechanism included, so multiple calls to
     the same element will trigger a call to the mapping functions each time:
 
     >>> y1[0]
@@ -54,11 +53,11 @@ processing 4
 
     See :func:`add_cache` for a simple form of caching mechanism.
 
-If `f` is slow to compute or `l` is large, lazy evaluation can dramatically
-reduce the delay to obtain any individual results. Furthermore, on can
-chain several transformations in a pipeline. This is particularly convenient
-when intermediate transformations are memory heavy because the intermediate
-results are stored for only one element at a time:
+If the transformation is slow to compute and/or the sequence is large, lazy
+evaluation can dramatically reduce the delay to obtain any individual results.
+Furthermore, on can chain several transformations in a pipeline. This is
+particularly convenient when intermediate transformations are memory heavy
+because the intermediate results are stored for only one element at a time:
 
 >>> def f(x):
 ...     # This intermediate result takes a lot of space...
@@ -73,34 +72,42 @@ results are stored for only one element at a time:
 >>> y1 = rmap(f, l)
 >>> y2 = rmap(g, y1)
 >>>
->>> # compute one of the output values only uses sizeof(float) * 10000
+>>> # computing one of the output values only uses sizeof(float) * 10000
+>>> # whereas explicitely computing y1 would take sizeof(float) * 10000 * 2000
 >>> y2[2]
-2.0
->>> # whereas explicitely computing the intermediate transformation
->>> # takes sizeof(float) * 10000 * 2000
->>> y3 = [f(x) for x in l]
->>> y4 = [g(x) for x in y3]
->>> y4[2]
 2.0
 
 
 Indexing
 --------
 
-most functions in this library including :func:`rmap` try to preserve the
+Most functions in this library including :func:`rmap` try to preserve the
 simplicity of slice-based indexing:
 
 >>> l = [3, 5, 1, 4]
 >>> y = rmap(lambda x: x * 2, l)
->>> [x for x in y[1:-1]]
-[10, 2]
->>> len(y)
-4
->>> len(y[1:-1])  # y values still aren't computed
+>>> list(y)
+[6, 10, 2, 8]
+>>> z = y[1:-1]
+>>> len(z)  # z values aren't yet computed
 2
+>>> list(z)
+[10, 2]
 
-If you need a more specific form of indexing, take a look at :func:`reindex`
-or :func:`cycle`.
+Where it makes sense, transformed sequences also support index and slice based
+assignment so as to make the objects truely behave like lists. For example with
+the :func:`reindex` function:
+
+>>> arr = [0, 1, 2, 3, 4, 5]
+>>> y = reindex(arr, [1, 1, 3, 4])
+>>> list(y)
+[1, 1, 3, 4]
+>>> y[0] = -1
+>>> arr
+[0, -1, 2, 3, 4, 5]
+>>> y[-2:] = [-3, -4]
+>>> arr
+[0, -1, 2, -3, -4, 5]
 
 
 Multivariate mapping
@@ -123,8 +130,12 @@ For datasets with a second level of indirection such as an array of arrays
 or an array of iterables, one can use :func:`rrmap` and
 :func:`rimap` respectively.
 
-:func:`eager_iter` returns an iterator over a sequence but uses multiple
-workers to compute the values more quickly.
+To finally compute all the values from a sequence, :func:`eager_iter` provides
+an iterator backed by multiple workers to compute the values more quickly.
+
+To see the library in practice, you can see how to write a multiprocessing
+capable minibatch iterator written in just 8 lines
+:ref:`in this example <minibatch iterator>`.
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?

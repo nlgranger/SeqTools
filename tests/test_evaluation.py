@@ -11,7 +11,7 @@ def test_cached():
         return x
 
     cache_size = 3
-    x = [random.random() for _ in range(100)]
+    x = [random.random() for _ in range(50)]
     y = rmap(f, x)
     z = add_cache(y, cache_size)
 
@@ -29,16 +29,25 @@ def test_cached():
     for i in range(len(x)):
         for j in range(max(0, i - cache_size + 1), i + 1):
             assert z[j] == x[j]
-            assert z[j] == x[j]
+            assert z[j - len(x)] == x[j]
     t4 = time()
 
     speedup = (t2 - t1) / (t4 - t3)
-    print(speedup)
     assert speedup > 1.9
+
+    x = list(range(100))
+    z = add_cache(x, cache_size)
+    z[-10] = -10
+    assert z[-10] == -10
+    assert x[-10] == -10
+
+    z[:10] = list(range(0, -10, -1))
+    assert list(z[:10]) == list(range(0, -10, -1))
+    assert list(x[:10]) == list(range(0, -10, -1))
 
 
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "proc"])
+@pytest.mark.parametrize("method", ["thread"])
 def test_eager_iter(method):
     def f1(x):
         sleep(.01)
