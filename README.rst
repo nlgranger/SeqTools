@@ -2,8 +2,8 @@
    :target: https://badge.fury.io/py/seqtools
 .. image:: https://travis-ci.org/nlgranger/SeqTools.svg?branch=master
    :target: https://travis-ci.org/nlgranger/SeqTools
-.. image:: https://readthedocs.org/projects/lazyproc/badge
-   :target: https://lazyproc.readthedocs.io
+.. image:: https://readthedocs.org/projects/seqtools-doc/badge
+   :target: http://seqtools-doc.readthedocs.io
 .. image:: https://api.codacy.com/project/badge/Grade/16ea84074da94d02a685147e39e0cfd3
    :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Grade
 .. image:: https://api.codacy.com/project/badge/Coverage/16ea84074da94d02a685147e39e0cfd3
@@ -90,7 +90,7 @@ Installation
 Documentation
 -------------
 
-The documentation is hosted at https://seqtools.readthedocs.io
+The documentation is hosted at https://seqtools-doc.readthedocs.io
 
 
 Similar libraries

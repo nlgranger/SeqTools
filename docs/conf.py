@@ -54,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'seqtools'
-copyright = '2017, Nicolas Granger'
+copyright = '2017-2018, Nicolas Granger'
 author = 'Nicolas Granger'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -174,12 +174,19 @@ texinfo_documents = [
 
 # -- Options for Linkcode extension ---------------------------------------
 
+linkcode_revision = "master" if "dev" in release else "v" + version
+linkcode_url = "https://github.com/nlgranger/SeqTools/blob/" \
+    + linkcode_revision + "/{}{}"
+
+
 def linkcode_resolve(domain, info):
     if domain != 'py' or not info['module']:
         return None
 
     modname = info['module']
+    topmodulename = modname.split('.')[0]
     fullname = info['fullname']
+
     submod = sys.modules.get(modname)
     if submod is None:
         return None
@@ -192,9 +199,11 @@ def linkcode_resolve(domain, info):
             return None
 
     try:
-        filepath = os.path.relpath(inspect.getsourcefile(obj))
+        modpath = pkg_resources.require(topmodulename)[0].location
+        filepath = os.path.relpath(
+            inspect.getsourcefile(obj), modpath)
         assert filepath is not None
-    except (TypeError, AssertionError):
+    except Exception:
         return None
 
     try:
@@ -204,7 +213,4 @@ def linkcode_resolve(domain, info):
     else:
         linespec = "#L%d-L%d" % (lineno, lineno + len(source) - 1)
 
-    subdir = "master" if "dev" in release else "v" + version
-    url = "https://github.com/nlgranger/SeqTools/blob/{}/{}{}"
-
-    return url.format(subdir, filepath, linespec)
+    return linkcode_url.format(filepath, linespec)
