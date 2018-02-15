@@ -112,6 +112,8 @@ else:
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['_static']
 
+html_show_sourcelink = False
+
 
 # -- Options for HTMLHelp output ------------------------------------------
 

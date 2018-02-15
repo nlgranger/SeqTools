@@ -1,13 +1,13 @@
 .. image:: https://badge.fury.io/py/seqtools.svg
    :target: https://badge.fury.io/py/seqtools
-.. image:: https://api.travis-ci.org/nlgranger/LazyProc.svg
-   :target: https://travis-ci.org/nlgranger/LazyProc
+.. image:: https://travis-ci.org/nlgranger/SeqTools.svg?branch=master
+   :target: https://travis-ci.org/nlgranger/SeqTools
 .. image:: https://readthedocs.org/projects/lazyproc/badge
    :target: https://lazyproc.readthedocs.io
-.. image:: https://api.codacy.com/project/badge/Coverage/e76ddab290bb4d1689a6e27f47452bdb
-   :target: https://www.codacy.com/app/nlgranger/LazyProc?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/LazyProc&amp;utm_campaign=Badge_Coverage
-.. image:: https://api.codacy.com/project/badge/Grade/e76ddab290bb4d1689a6e27f47452bdb
-   :target: https://www.codacy.com/app/nlgranger/LazyProc?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/LazyProc&amp;utm_campaign=Badge_Grade
+.. image:: https://api.codacy.com/project/badge/Grade/16ea84074da94d02a685147e39e0cfd3
+   :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Grade
+.. image:: https://api.codacy.com/project/badge/Coverage/16ea84074da94d02a685147e39e0cfd3
+   :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Coverage
 
 
 SeqTools

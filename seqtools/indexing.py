@@ -156,8 +156,8 @@ class Repetition(Sequence):
 
 
 class InfiniteRepetition(Iterable):
-    def __init__(self, item):
-        self.object = item
+    def __init__(self, value):
+        self.value = value
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -181,7 +181,7 @@ class InfiniteRepetition(Iterable):
             else:
                 stop -= (-step + start - stop) % -step
 
-            return repeat(self.object, (stop - start) // step)
+            return repeat(self.value, (stop - start) // step)
 
         elif isint(key):
             if key < 0:
@@ -189,7 +189,7 @@ class InfiniteRepetition(Iterable):
                     "Cannot use indices relative to length on "
                     + self.__class__.__name__)
 
-            return self.object
+            return self.value
 
         else:
             raise TypeError(
@@ -211,7 +211,7 @@ class InfiniteRepetition(Iterable):
                 raise ValueError("slice step cannot be 0")
 
             if (stop - start) * step > 0:
-                self.object = value[-1]
+                self.value = value[-1]
 
         elif isint(key):
             if key < 0:
@@ -219,7 +219,7 @@ class InfiniteRepetition(Iterable):
                     "Cannot use indices relative to length on "
                     + self.__class__.__name__)
 
-            self.object = value
+            self.value = value
 
         else:
             raise TypeError(
@@ -227,13 +227,14 @@ class InfiniteRepetition(Iterable):
                 "slices, not " + key.__class__.__name__)
 
     def __iter__(self):
-        return itertools.repeat(self.object)
+        return itertools.repeat(self.value)
 
 
-def repeat(item, times=None):
+def repeat(value, times=None):
+    """Return a view of the repeated value with an optional size limit."""
     if isint(times) and times > 1:
-        return Repetition(item, times)
+        return Repetition(value, times)
     elif times is None:
-        return InfiniteRepetition(item)
+        return InfiniteRepetition(value)
     else:
         raise TypeError("times must be a positive integer or None")

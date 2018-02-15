@@ -82,7 +82,7 @@ def smap(f, *sequence):
 
 
 def starmap(f, sequence):
-    """Similar to :func`smap` but the elements of the sequence are assumed to
+    """Similar to :func:`smap` but the elements of the sequence are assumed to
     be tuple of arguments for `f`.
     """
     return smap(lambda x: f(*x), sequence)
