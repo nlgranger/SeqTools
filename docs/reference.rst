@@ -1,32 +1,33 @@
 .. testsetup:: *
 
-   from lproc import *
+   from seqtools import *
 
-.. currentmodule:: lproc
+.. currentmodule:: seqtools
 
 
 API Reference
 =============
 
 .. autosummary::
-    rmap
-    rimap
-    rrmap
-    collate
-    concatenate
-    cycle
-    reindex
-    add_cache
-    eager_iter
-    EagerAccessException
+
+   add_cache
+   eager_iter
+   reindex
+   cycle
+   repeat
+   smap
+   starmap
+   collate
+   concatenate
+   batches
+   split
 
 
 Mapping
 -------
 
-.. autofunction:: rmap
-.. autofunction:: rimap
-.. autofunction:: rrmap
+.. autofunction:: smap
+.. autofunction:: starmap
 
 
 Indexing and reshaping
@@ -34,8 +35,9 @@ Indexing and reshaping
 
 .. autofunction:: concatenate
 .. autofunction:: collate
-.. autofunction:: cycle
 .. autofunction:: reindex
+.. autofunction:: cycle
+.. autofunction:: repeat
 
 
 Evaluation

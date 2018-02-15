@@ -1,5 +1,5 @@
 from random import random, randint
-from lproc import collate, concatenate, batches
+from seqtools import collate, concatenate, batches, split
 import pytest
 
 
@@ -36,7 +36,6 @@ def test_concatenate():
     assert arrs1 == arrs2
 
 
-
 def test_blockview():
     arr = list(range(137))
 
@@ -46,7 +45,7 @@ def test_blockview():
 
     chunked = list(batches(arr, 5, False))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
-               + [[135, 136]]
+        + [[135, 136]]
     assert chunked == expected
 
     chunked = list(batches(arr, 5, pad=0, collate_fn=list))
@@ -57,3 +56,22 @@ def test_blockview():
     chunked = batches(arr, 5, pad=0, collate_fn=list)
     chunked[:1] = [[-1, -2, -3, -4, -5]]
     assert arr == [-1, -2, -3, -4, -5] + list(range(5, 137))
+
+
+def test_split():
+    arr = list(range(125))
+
+    y = split(arr, 4)
+    assert y[-1] == list(range(100, 125))
+    assert list(y) == [list(range(i, i + 25)) for i in range(0, 125, 25)]
+
+    y = split(arr, list(range(25, 125, 25)))
+    assert y[-1] == list(range(100, 125))
+    assert list(y) == [list(range(i, i + 25)) for i in range(0, 125, 25)]
+
+    y[-1] = [0] * 25
+    assert arr[100:] == [0] * 25
+
+    y[-1:] = [list(range(0, -25, -1))]
+    assert arr[:100] == list(range(100))
+    assert arr[100:] == list(range(0, -25, -1))

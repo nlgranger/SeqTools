@@ -1,6 +1,6 @@
 import array
 import time
-import lproc
+import seqtools
 
 
 def process_fn(x):
@@ -30,20 +30,20 @@ def batch_iter(data, f, buffers, batch_size, drop_last=False, nworkers=0):
     :drop_last:
         Wether to drop a final minibatch smaller than `batch_size`
     :nworkers:
-        number of workers, see :func:`lproc.eager_iter`
+        number of workers, see :func:`seqtools.eager_iter`
     """
-    preprocessed = lproc.rmap(f, data)
-    data_batches = lproc.batches(preprocessed, batch_size, drop_last)
-    ring_buffers = lproc.cycle(buffers, len(data_batches))
+    preprocessed = seqtools.smap(f, data)
+    data_batches = seqtools.batches(preprocessed, batch_size, drop_last)
+    ring_buffers = seqtools.cycle(buffers, len(data_batches))
 
     def batch_copy(source, destination):
         for i, v in enumerate(source):
             destination[i] = v
         return destination
 
-    minibatches = lproc.rmap(batch_copy, data_batches, ring_buffers)
+    minibatches = seqtools.smap(batch_copy, data_batches, ring_buffers)
 
-    return lproc.eager_iter(
+    return seqtools.eager_iter(
         minibatches, nworkers,
         max_buffered=len(buffers))
 

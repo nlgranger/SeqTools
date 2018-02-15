@@ -44,7 +44,7 @@ The first step is to map the preprofessing function onto the raw data:
    :lines: 35
 
 then take a view of the dataset as blocks, which is exactly what
-:func:`lproc.batches` does:
+:func:`seqtools.batches` does:
 
 .. literalinclude:: minibatch_iter.py
    :lines: 36
@@ -60,11 +60,11 @@ be done by mapping a copy-and-return function over the two sequences of blocks:
 .. literalinclude:: minibatch_iter.py
    :lines: 39-44
 
-Notice the way :func:`lproc.rmap` handles functions with multiple arguments:
+Notice the way :func:`seqtools.smap` handles functions with multiple arguments:
 it is the same as the standard :func:`map` function.
 
 The final step is to return a multithreaded iterator with
-:func:`lproc.eager_iter` to quickly compute and return the minibatches. To make
+:func:`seqtools.eager_iter` to quickly compute and return the minibatches. To make
 sure that the worker are not too greedy and erase a buffer before it has been
 read, the `max_buffered` argument must be set appropriately.
 

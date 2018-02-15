@@ -1,8 +1,8 @@
 from typing import Sequence
-import array
+from array import array
 import bisect
 from logging import warning
-from .common import isint, basic_getitem, basic_setitem, SliceView
+from .common import isint, basic_getitem, basic_setitem
 
 
 class Collation(Sequence):
@@ -53,7 +53,7 @@ class Concatenation(Sequence):
             else:
                 self.sequences.append(s)
 
-        self.offsets = array.array('L', [0] + [len(s) for s in self.sequences])
+        self.offsets = array('L', [0] + [len(s) for s in self.sequences])
         for i in range(1, len(self.sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
@@ -146,3 +146,51 @@ def batches(sequence, k, drop_last=False, pad=None, collate_fn=None):
         returning them.
     """
     return BatchView(sequence, k, drop_last, pad, collate_fn)
+
+
+class Split(Sequence):
+    def __init__(self, sequence, edges):
+        n = len(sequence)
+
+        if isint(edges):
+            if n / (edges + 1) % 1 != 0:
+                raise ValueError("edges must divide the size of the sequence")
+            edges = array('L', range(0, n + 1, n // (edges + 1)))
+
+        else:
+            edges = array('L', [0] + [max(0, min(e, n)) for e in edges] + [n])
+
+        self.sequence = sequence
+        self.edges = edges
+
+    def __len__(self):
+        return len(self.edges) - 1
+
+    @basic_getitem
+    def __getitem__(self, key):
+        return self.sequence[self.edges[key]:self.edges[key + 1]]
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        if len(value) != self.edges[key + 1] - self.edges[key]:
+            raise ValueError(
+                self.__class__.__name__ +
+                " only supports one-to-one assignment")
+
+        self.sequence[self.edges[key]:self.edges[key + 1]] = value
+
+
+def split(sequence, edges):
+    """Split a sequence into subsequences
+
+    :param sequence:
+        the input sequence
+    :param edges:
+        `edges can be of two types:
+        - a 1D array that contains the indexes where the sequence
+          should be cut, the beginning and the end of the sequence are
+          implicit.
+        - an int specifies how many cuts of equal size should be done, in which
+          case `edges + 1` must divide the length of the sequence.
+    """
+    return Split(sequence, edges)

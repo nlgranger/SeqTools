@@ -1,10 +1,11 @@
-from lproc import reindex, cycle
 from random import random, randint
+import pytest
+from seqtools import reindex, cycle, repeat
 
 
 def test_reindex():
     arr = [random() for _ in range(100)]
-    idx = [randint(0, len(arr) - 1) for _ in range(200)]
+    idx = [randint(-len(arr), len(arr) - 1) for _ in range(200)]
     reindexed = reindex(arr, idx)
     expected = [arr[i] for i in idx]
 
@@ -25,13 +26,14 @@ def test_reindex():
 
     arr1 = [random() for _ in range(100)]
     arr2 = list(arr1)
-    idx2 = [1, 2, 3]
+    idx2 = [1, 2, -3]
     new_values = [-1, -2, -3]
     reindexed = reindex(reindex(arr1, idx), idx2)
     for i in range(3):
         reindexed[i] = new_values[i]
         arr2[idx[idx2[i]]] = new_values[i]
     assert arr1 == arr2
+
 
 def test_cycle():
     arr = [randint(0, 1000) for _ in range(100)]
@@ -41,14 +43,47 @@ def test_cycle():
     assert list(looped[150:105:-2]) == list(looped)[150:105:-2]
 
     looped = cycle(arr)
-    assert [looped[i] for i in range(999)] == [arr[i%100] for i in range(999)]
+    assert [looped[i] for i in range(999)] \
+        == [arr[i % 100] for i in range(999)]
     it = iter(looped)
-    assert [next(it) for _ in range(999)] == [arr[i % 100] for i in range(999)]
-    sublooped = looped[3:177:4]
-    assert list(sublooped) == [arr[i % 100] for i in range(3, 177, 4)]
+    assert [next(it) for _ in range(999)] \
+        == [arr[i % 100] for i in range(999)]
+    sublooped = looped[:177:4]
+    assert list(sublooped) == [arr[i % 100] for i in range(0, 177, 4)]
+
+    with pytest.raises(IndexError):
+        list(looped[-20::4])
 
     arr = [randint(0, 1000) for _ in range(100)]
     looped = cycle(arr, 250)
     looped[50:150] = list(range(0, -100, -1))
     assert arr[50:] == list(range(0, -50, -1))
     assert arr[:50] == list(range(-50, -100, -1))
+
+
+def test_repeat():
+    a = 3
+    r = repeat(a, 100)
+    assert len(r) == 100
+    it = iter(r)
+    assert list(next(it) for _ in range(100)) == [3] * 100
+    assert list(iter(r)) == [3] * 100
+    r[-3] = 2
+    assert r[10] == 2
+    r[80:-10] = list(range(10))
+    assert list(iter(r)) == [9] * 100
+
+    a = 3
+    r = repeat(a)
+    it = iter(r)
+    assert list(next(it) for _ in range(100)) == [3] * 100
+    assert [r[i] for i in range(100)] == [3] * 100
+    assert list(r[:100]) == [3] * 100
+    with pytest.raises(IndexError):
+        r[-3] = 2
+    r[3] = 2
+    assert r[10] == 2
+    with pytest.raises(IndexError):
+        r[80:-10] = list(range(10))
+    r[80:91] = list(range(10))
+    assert r[0] == 9

@@ -1,14 +1,13 @@
 from typing import Sequence, Iterable
-from itertools import count
+import itertools
 from array import array
-
 from .common import isint, basic_getitem, basic_setitem
 
 
 class Reindexing(Sequence):
     def __init__(self, sequence, indexes):
         if isinstance(sequence, Reindexing):  # optimize nested subsets
-            indexes = array('L', (sequence.indexes[i] for i in indexes))
+            indexes = array('l', (sequence.indexes[i] for i in indexes))
             sequence = sequence.sequence
 
         self.sequence = sequence
@@ -124,7 +123,7 @@ class InfiniteCycle(Iterable):
                 "slices, not " + key.__class__.__name__)
 
     def __iter__(self):
-        for i in count():
+        for i in itertools.count():
             yield self.sequence[i % len(self.sequence)]
 
 
@@ -134,3 +133,107 @@ def cycle(sequence, limit=None):
         return InfiniteCycle(sequence)
     else:
         return Cycle(sequence, limit)
+
+
+class Repetition(Sequence):
+    def __init__(self, item, times):
+        self.object = item
+        self.times = times
+
+    def __len__(self):
+        return self.times
+
+    @basic_getitem
+    def __getitem__(self, item):
+        return self.object
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        self.object = value
+
+    def __iter__(self):
+        return itertools.repeat(self.object, self.times)
+
+
+class InfiniteRepetition(Iterable):
+    def __init__(self, item):
+        self.object = item
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start, stop, step = key.start, key.stop, key.step
+            start = 0 if start is None else start
+            step = 1 if step is None else step
+
+            if start < 0 or stop is None or stop < 0:
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
+
+            if step == 0:
+                raise ValueError("slice step cannot be 0")
+
+            if (stop - start) * step <= 0:
+                return []
+
+            if step > 0:
+                stop += (step + stop - start) % step
+            else:
+                stop -= (-step + start - stop) % -step
+
+            return repeat(self.object, (stop - start) // step)
+
+        elif isint(key):
+            if key < 0:
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
+
+            return self.object
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            start, stop, step = key.start, key.stop, key.step
+
+            step = 1 if step is None else step
+
+            if start < 0 or stop is None or stop < 0:
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
+
+            if step == 0:
+                raise ValueError("slice step cannot be 0")
+
+            if (stop - start) * step > 0:
+                self.object = value[-1]
+
+        elif isint(key):
+            if key < 0:
+                raise IndexError(
+                    "Cannot use indices relative to length on "
+                    + self.__class__.__name__)
+
+            self.object = value
+
+        else:
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+    def __iter__(self):
+        return itertools.repeat(self.object)
+
+
+def repeat(item, times=None):
+    if isint(times) and times > 1:
+        return Repetition(item, times)
+    elif times is None:
+        return InfiniteRepetition(item)
+    else:
+        raise TypeError("times must be a positive integer or None")

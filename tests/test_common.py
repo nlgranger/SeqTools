@@ -1,4 +1,4 @@
-from lproc.common import SliceView
+from seqtools.common import SeqSlice
 
 
 def test_sliceview():
@@ -13,17 +13,17 @@ def test_sliceview():
         slice(250, -125, -1)]
 
     for k in keys:
-        v = SliceView(arr, k)
+        v = SeqSlice(arr, k)
         assert list(v) == arr[k]
         assert list(iter(v)) == arr[k]
         assert [v[i] for i in range(len(v))] == arr[k]
 
-    v = SliceView(arr, slice(3, -25, 4))[14:1:-2]
+    v = SeqSlice(arr, slice(3, -25, 4))[14:1:-2]
     assert list(v) == arr[3:-25:4][14:1:-2]
     assert id(v.sequence) == id(arr)
 
     arr2 = list(arr)
-    v = SliceView(arr2, slice(25, 37, 3))
+    v = SeqSlice(arr2, slice(25, 37, 3))
     v[1] = -1
     assert arr2[:28] == arr[:28]
     assert arr2[28] == -1
@@ -31,7 +31,7 @@ def test_sliceview():
 
     arr2 = list(arr)
     arr3 = list(arr)
-    v = SliceView(arr2, slice(25, 37, 3))
+    v = SeqSlice(arr2, slice(25, 37, 3))
     v[1:-1] = [-1, -2]
     arr3[28:34:3] = [-1, -2]
     assert arr2 == arr3

@@ -1,8 +1,8 @@
-.. currentmodule:: lproc
+.. currentmodule:: seqtools
 
 .. testsetup::
 
-   from lproc import *
+   import seqtools
 
 
 Tutorial
@@ -11,23 +11,23 @@ Tutorial
 Simple mapping
 --------------
 
-The most basic (and possibly the most useful) function is :func:`rmap`
+The most basic (and possibly the most useful) function is :func:`smap`
 which maps a function to each element of a sequence:
 
 >>> l = [3, 5, 1, 4]
->>> y = rmap(lambda x: x * 2, l)
+>>> y = seqtools.smap(lambda x: x * 2, l)
 >>> [y[i] for i in range(4)]
 [6, 10, 2, 8]
 
-:func:`rmap` is equivalent to the standard :func:`map` function. To understand
-the effect of lazy evaluation, let's add a notification when the function is
-called:
+:func:`smap` is equivalent to the standard :func:`map` function. To
+understand the effect of lazy evaluation, let's add a notification when the
+function is called:
 
 >>> def f(x):
 ...     print("processing {}".format(x))
 ...     return x * 2
 ...
->>> y1 = rmap(f, l)
+>>> y1 = seqtools.smap(f, l)
 >>> # nothing happened so far
 >>>
 >>> y1[0]  # f will be called now and specifically on item 0
@@ -69,8 +69,8 @@ because the intermediate results are stored for only one element at a time:
 >>> l = list(range(2000))
 >>>
 >>> # construct pipeline without computing anything
->>> y1 = rmap(f, l)
->>> y2 = rmap(g, y1)
+>>> y1 = seqtools.smap(f, l)
+>>> y2 = seqtools.smap(g, y1)
 >>>
 >>> # computing one of the output values only uses sizeof(float) * 10000
 >>> # whereas explicitely computing y1 would take sizeof(float) * 10000 * 2000
@@ -81,11 +81,11 @@ because the intermediate results are stored for only one element at a time:
 Indexing
 --------
 
-Most functions in this library including :func:`rmap` try to preserve the
+Most functions in this library including :func:`smap` try to preserve the
 simplicity of slice-based indexing:
 
 >>> l = [3, 5, 1, 4]
->>> y = rmap(lambda x: x * 2, l)
+>>> y = seqtools.smap(lambda x: x * 2, l)
 >>> list(y)
 [6, 10, 2, 8]
 >>> z = y[1:-1]
@@ -99,7 +99,7 @@ assignment so as to make the objects truely behave like lists. For example with
 the :func:`reindex` function:
 
 >>> arr = [0, 1, 2, 3, 4, 5]
->>> y = reindex(arr, [1, 1, 3, 4])
+>>> y = seqtools.reindex(arr, [1, 1, 3, 4])
 >>> list(y)
 [1, 1, 3, 4]
 >>> y[0] = -1
@@ -118,7 +118,7 @@ together and fed as distinct arguments to the function:
 
 >>> l1 = [3, 5, 1, 4]
 >>> l2 = [4, 5, 7, 2]
->>> y = rmap(lambda x1, x2: x1 + x2, l1, l2)
+>>> y = seqtools.smap(lambda x1, x2: x1 + x2, l1, l2)
 >>> list(y)
 [7, 10, 8, 6]
 
@@ -127,7 +127,7 @@ Going further
 -------------
 
 For datasets with a second level of indirection such as an array of arrays
-or an array of iterables, one can use :func:`rrmap` and
+or an array of iterables, one can use :func:`rsmap` and
 :func:`rimap` respectively.
 
 To finally compute all the values from a sequence, :func:`eager_iter` provides

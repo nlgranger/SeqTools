@@ -6,7 +6,6 @@ import sys
 from collections import OrderedDict
 from typing import Sequence
 from tblib import Traceback
-
 from .common import basic_getitem, basic_setitem
 
 

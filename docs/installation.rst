@@ -1,11 +1,11 @@
 Installation
 ============
 
-LazyProc can be installed from `PyPi <https://pypi.python.org/pypi/lproc>`_:
+SeqTools can be installed from `PyPi <https://pypi.python.org/pypi/seqtools>`_:
 
 .. code-block:: bash
 
-   pip install lproc
+   pip install seqtools
 
 or from the source repository instead:
 
@@ -14,4 +14,4 @@ or from the source repository instead:
    pip install git+https://github.com/nlgranger/LazyProc.git
 
 Many elements are reusable independantly, you can pick what you need directly
-from the source code at https://github.com/nlgranger/LazyProc.
+from the source code at https://github.com/nlgranger/SeqTools.

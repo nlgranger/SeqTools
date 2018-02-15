@@ -5,7 +5,7 @@ import pickle as pkl
 import importlib
 import types
 
-from lproc import SerializableFunc
+from seqtools import SerializableFunc
 
 
 def test_SerializableFunc():
@@ -16,7 +16,7 @@ def test_SerializableFunc():
         with open(os.path.join(pkgdir, '__init__.py'), "w") as f:
             f.write("\n")
         with open(os.path.join(pkgdir, 'some_module.py'), "w") as f:
-            f.write("from lproc import SerializableFunc\n")
+            f.write("from seqtools import SerializableFunc\n")
             f.write("@SerializableFunc\n")
             f.write("def a():\n    return 0\n")
 
@@ -57,7 +57,7 @@ def test_nestprotection():
         with open(os.path.join(pkgdir, '__init__.py'), "w") as f:
             f.write("\n")
         with open(os.path.join(pkgdir, 'some_module.py'), "w") as f:
-            f.write("from lproc import SerializableFunc\n")
+            f.write("from seqtools import SerializableFunc\n")
             f.write("@SerializableFunc\n")
             f.write("def a():\n    return 0\n")
 

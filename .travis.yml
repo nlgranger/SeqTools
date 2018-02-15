@@ -3,14 +3,13 @@ cache: pip
 python:
   - '3.6'
 install:
-  - pip install -U pip wheel
   - pip install -e .
   - pip install nose
   - pip install pytest pytest-cov pytest-timeout
   - pip install codacy-coverage
   - pip install sphinx
 script:
-  - py.test --cov-report=xml --cov=lproc tests/
+  - py.test --cov-report=xml --cov=seqtools tests/
   - python -m sphinx -M doctest docs docs/_build
 after_success:
   - python-codacy-coverage -r coverage.xml
