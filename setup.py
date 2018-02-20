@@ -1,4 +1,21 @@
+import sys
 from setuptools import setup
+from setuptools.command.test import test as TestCommand
+
+
+class PyTest(TestCommand):
+    user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = ''
+
+    def run_tests(self):
+        import shlex
+        # import here, cause outside the eggs aren't loaded
+        import pytest
+        errno = pytest.main(shlex.split(self.pytest_args))
+        sys.exit(errno)
 
 
 setup(
@@ -12,14 +29,26 @@ setup(
     packages=['seqtools'],
     version='0.8.dev',
     install_requires=[
-        'tblib',
-        'typing;python_version<"3.6"'
+        'typing;python_version<"3.6"',
+        'future',
     ],
-    python_requires='>=3',
+    extras_require={
+        'error_info': ['tblib'],
+    },
+    tests_require=[
+        'pytest', 'tblib'
+    ],
+    cmdclass={'test': PyTest},
+    python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
     keywords='mapping lazy delayed pipeline processing',
     classifiers=[
+        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
+        "Operating System :: OS Independent",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
-        "Topic :: Software Development :: Libraries",
+        "Development Status :: 3 - Alpha"
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research"
     ]
 )

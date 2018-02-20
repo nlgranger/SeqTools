@@ -1,5 +1,6 @@
 import inspect
 from typing import Sequence
+from future.utils import raise_from
 from .common import basic_getitem
 
 
@@ -25,7 +26,7 @@ class Mapping(Sequence):
 
         except Exception as e:
             if self.debug_msg is not None:
-                raise e from MappingException(self.debug_msg)
+                raise_from(e, MappingException(self.debug_msg))
             else:
                 raise
 
@@ -36,7 +37,7 @@ class Mapping(Sequence):
 
             except Exception as e:
                 if self.debug_msg is not None:
-                    raise e from MappingException(self.debug_msg)
+                    raise_from(e, MappingException(self.debug_msg))
                 else:
                     raise
 
@@ -53,18 +54,18 @@ def smap(f, *sequence):
     Example:
 
     >>> a = [1, 2, 3, 4]
-    >>> [x + 2 for x in a]
+    >>> print([v + 2 for v in a])
     [3, 4, 5, 6]
     >>> m = smap(lambda x: x + 2, a)
-    >>> [x for x in m]
+    >>> print([v for v in m])
     [3, 4, 5, 6]
-    >>> def do(x, y):
+    >>> def do(y, z):
     ...     print("computing now")
-    ...     return x + y
+    ...     return y + z
     ...
     >>> a, b = [1, 2, 3, 4], [4, 3, 2, 1]
     >>> m = smap(do, a, b)
-    >>> [x for x in m]
+    >>> print([v for v in m])
     computing now
     computing now
     computing now
@@ -72,11 +73,14 @@ def smap(f, *sequence):
     [5, 5, 5, 5]
     """
     stack = [
-        (f, l, m, c[0].strip('\n') if c is not None else '?')
-        for _, f, l, m, c, _ in inspect.stack()[1:11][::-1]]
+        (filename,
+         lineno,
+         function,
+         code_context[0].strip('\n') if code_context else '?')
+        for _, filename, lineno, function, code_context, _ in inspect.stack()
+    ][1:11][::-1]
     debug_msg = "in smap created at:\n" + "\n".join(
-        "  File \"{}\", line {}, in {}\n    {}".format(f, l, m, c)
-        for f, l, m, c in stack)
+        "  File \"{}\", line {}, in {}\n    {}".format(*st) for st in stack)
 
     return Mapping(f, sequence, debug_msg)
 

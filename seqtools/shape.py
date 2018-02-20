@@ -2,6 +2,10 @@ from typing import Sequence
 from array import array
 import bisect
 from logging import warning
+try:
+    from itertools import izip as zip
+except ImportError:
+    pass
 from .common import isint, basic_getitem, basic_setitem
 
 

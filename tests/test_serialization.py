@@ -1,15 +1,20 @@
 import os
 import sys
 import tempfile
+import shutil
 import pickle as pkl
-import importlib
 import types
+import time
 
 from seqtools import SerializableFunc
 
+if sys.version_info >= (3, 4):
+    from importlib import reload
+
 
 def test_SerializableFunc():
-    with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp()
+    try:
         sys.path.insert(0, tmpdir)
         pkgdir = os.path.join(tmpdir, 'test_package')
         os.mkdir(pkgdir)
@@ -27,10 +32,11 @@ def test_SerializableFunc():
 
         assert b() == 0, "serialized function malfunctionning"
 
+        time.sleep(1)  # otherwise new timestamp will not invalidate cache
         with open(os.path.join(pkgdir, 'some_module.py'), "w") as f:
             f.write("def a():\n    return 1\n")
 
-        importlib.reload(some_module)
+        some_module = reload(some_module)
 
         assert some_module.a() == 1, "reload failed"
         assert b() == 0, "serialized function not standalone"
@@ -42,15 +48,19 @@ def test_SerializableFunc():
         sys.path.pop(0)
         loaded_package_modules = dict([
             (key, value) for key, value in sys.modules.items()
-            if key.startswith("test_package")
-               and isinstance(value, types.ModuleType)])
+            if (key.startswith("test_package")
+                and isinstance(value, types.ModuleType))])
 
         for key in loaded_package_modules:
             del sys.modules[key]
 
+    finally:
+        shutil.rmtree(tmpdir)
+
 
 def test_nestprotection():
-    with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp()
+    try:
         sys.path.insert(0, tmpdir)
         pkgdir = os.path.join(tmpdir, 'test_package')
         os.mkdir(pkgdir)
@@ -68,14 +78,18 @@ def test_nestprotection():
         b = SerializableFunc(some_module.a)
         c = pkl.loads(pkl.dumps(b))
 
-        assert some_module.a() == b() == c() == 0
+        assert some_module.a() == 0 and b() == 0 and c() == 0
 
+        time.sleep(1)  # otherwise new timestamp will not invalidate cache
         with open(os.path.join(pkgdir, 'some_module.py'), "w") as f:
             f.write("def a():\n    return 1\n")
 
-        importlib.reload(some_module)
+        some_module = reload(some_module)
 
         assert some_module.a() == 1, "reloading test module failed"
         assert c() == 0, "serialized function not standalone"
 
         sys.path.pop(0)
+
+    finally:
+        shutil.rmtree(tmpdir)

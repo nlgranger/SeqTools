@@ -1,23 +1,25 @@
 language: python
 cache: pip
+
 python:
+  - '2.7'
+  - '3.5'
   - '3.6'
+
 install:
-  - pip install -e .
-  - pip install nose
-  - pip install pytest pytest-cov pytest-timeout
-  - pip install codacy-coverage
-  - pip install sphinx
+  - pip install tox
+  - pip install codecov
+
 script:
-  - py.test --cov-report=xml --cov=seqtools tests/
-  - python -m sphinx -M doctest docs docs/_build
-after_success:
-  - python-codacy-coverage -r coverage.xml
+  - tox -e py${TRAVIS_PYTHON_VERSION:0:1}${TRAVIS_PYTHON_VERSION:2:1}
+  - tox -e coverage -- xml
+  - codecov --file=coverage.xml
+
 deploy:
   provider: pypi
   user: $PYPI_USER
   password: $PYPI_PASS
-  skip_cleanup: true
+  distributions: "sdist bdist_wheel"
   on:
     tags: true
     branch: master

@@ -1,10 +1,14 @@
-import inspect
 import os
-import tempfile
-
 import sys
-from importlib import import_module, reload
+import inspect
+import tempfile
+import shutil
 import functools
+
+if sys.version_info >= (3, 4):
+    from importlib import import_module, reload
+else:
+    from importlib import import_module
 
 
 class SerializableFunc:
@@ -39,12 +43,16 @@ class SerializableFunc:
     def __setstate__(self, state):
         self.source, self.name = state
 
-        with tempfile.TemporaryDirectory() as d:
+        d = tempfile.mkdtemp()
+        try:
             with open(os.path.join(d, "module.py"), 'w') as f:
                 f.write(self.source)
 
             sys.path.insert(0, d)
             m = import_module("module")
-            reload(m)
+            m = reload(m)
             self.func = getattr(m, self.name)
             sys.path.pop(0)
+
+        finally:
+            shutil.rmtree(d)

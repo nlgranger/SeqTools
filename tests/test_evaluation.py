@@ -66,7 +66,6 @@ def test_eager_iter(method):
 
     assert all(x_ == z_ for x_, z_ in zip(arr, z))
     speedup = (t2 - t1) / (t4 - t3)
-    print(speedup)
     assert speedup > 2.5  # be conservative for travis busy machines...
 
 

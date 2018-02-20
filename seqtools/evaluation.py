@@ -5,8 +5,13 @@ import pickle as pkl
 import sys
 from collections import OrderedDict
 from typing import Sequence
-from tblib import Traceback
+from future.utils import raise_from, raise_with_traceback
 from .common import basic_getitem, basic_setitem
+
+try:
+    import tblib
+except ImportError:
+    tblib = None
 
 
 class CachedSequence(Sequence):
@@ -68,7 +73,7 @@ def iter_worker(sequence, q_in, q_out):
             try:  # try to add information
                 _, ev, tb = sys.exc_info()
                 ev = pkl.loads(pkl.dumps(ev))
-                tb = pkl.loads(pkl.dumps(Traceback(tb)))
+                tb = pkl.loads(pkl.dumps(tblib.Traceback(tb)))
 
             except Exception:  # nothing more we can do
                 q_out.put((None, (si, None, None)))
@@ -142,7 +147,7 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     q_in = queue_type(max_buffered)
     q_out = queue_type(max_buffered)
 
-    buffer = [None] * max_buffered  # storage for result values
+    ring_buffer = [None] * max_buffered  # storage for result values
     done = [False] * max_buffered
     n = len(sequence)
     workers = []
@@ -171,20 +176,23 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
                 si_, ev, tb = v
 
                 if ev is not None:
-                    raise EagerAccessException(
-                        "failed to get item {}".format(si_)) \
-                        from ev.with_traceback(tb.as_traceback())
+                    try:
+                        raise_with_traceback(ev, tb.as_traceback())
+                    except Exception as e_reason:
+                        e = EagerAccessException(
+                            "failed to get item {}".format(si_))
+                        raise_from(e, e_reason)
 
                 else:
                     raise EagerAccessException(
                         "failed to get item {}".format(si_))
 
-            buffer[si_ % max_buffered] = v
+            ring_buffer[si_ % max_buffered] = v
             done[si_ % max_buffered] = True
 
             # Return computed values
             while done[i % max_buffered]:
-                yield buffer[i % max_buffered]
+                yield ring_buffer[i % max_buffered]
                 done[i % max_buffered] = False
 
                 # schedule next value in released slot

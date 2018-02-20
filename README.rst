@@ -4,10 +4,10 @@
    :target: https://travis-ci.org/nlgranger/SeqTools
 .. image:: https://readthedocs.org/projects/seqtools-doc/badge
    :target: http://seqtools-doc.readthedocs.io
-.. image:: https://api.codacy.com/project/badge/Grade/16ea84074da94d02a685147e39e0cfd3
+.. image:: https://api.codacy.com/project/badge/Grade/f5324dc1e36d46f7ae1cabaaf6bce263
    :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Grade
-.. image:: https://api.codacy.com/project/badge/Coverage/16ea84074da94d02a685147e39e0cfd3
-   :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Coverage
+.. image:: https://codecov.io/gh/nlgranger/SeqTools/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/nlgranger/SeqTools
 
 
 SeqTools

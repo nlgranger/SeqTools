@@ -10,6 +10,7 @@
 
 .. testsetup::
 
+   from __future__ import print_function
    import seqtools
    import time
 
