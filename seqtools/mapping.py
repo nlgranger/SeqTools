@@ -10,8 +10,11 @@ class MappingException(Exception):
 
 class Mapping(Sequence):
     def __init__(self, f, sequences, debug_msg=None):
-        assert callable(f), "f must be callable"
-        assert len(sequences) > 0, "at least one input sample must be provided"
+        if not callable(f):
+            raise TypeError("f must be callable")
+        if len(sequences) <= 0:
+            raise ValueError("at least one input sample must be provided")
+
         self.sequences = sequences
         self.f = f
         self.debug_msg = debug_msg
@@ -72,15 +75,13 @@ def smap(f, *sequence):
     computing now
     [5, 5, 5, 5]
     """
-    stack = [
-        (filename,
-         lineno,
-         function,
-         code_context[0].strip('\n') if code_context else '?')
-        for _, filename, lineno, function, code_context, _ in inspect.stack()
-    ][1:11][::-1]
-    debug_msg = "in smap created at:\n" + "\n".join(
-        "  File \"{}\", line {}, in {}\n    {}".format(*st) for st in stack)
+    stack = [(file, line, func, ctx[0].strip('\n') if ctx else '?')
+             for _, file, line, func, ctx, _
+             in inspect.stack()]
+    stack = stack[1:11][::-1]
+    debug_msg = "in smap created at:\n"
+    debug_msg += "\n".join("  File \"{}\", line {}, in {}\n    {}".format(*l)
+                           for l in stack)
 
     return Mapping(f, sequence, debug_msg)
 
