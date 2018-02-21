@@ -96,10 +96,10 @@ simplicity of slice-based indexing:
 
 Where it makes sense, transformed sequences also support index and slice based
 assignment so as to make the objects truely behave like lists. For example with
-the :func:`reindex` function:
+the :func:`take` function:
 
 >>> arr = [0, 1, 2, 3, 4, 5]
->>> y = seqtools.reindex(arr, [1, 1, 3, 4])
+>>> y = seqtools.take(arr, [1, 1, 3, 4])
 >>> list(y)
 [1, 1, 3, 4]
 >>> y[0] = -1

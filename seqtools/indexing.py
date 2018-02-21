@@ -62,7 +62,7 @@ class Reindexing(Sequence):
                 "slices, not " + key.__class__.__name__)
 
 
-def reindex(sequence, indexes):
+def take(sequence, indexes):
     """Return a view on the sequence reordered by indexes."""
     return Reindexing(sequence, indexes)
 

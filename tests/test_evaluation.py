@@ -7,11 +7,11 @@ from seqtools import add_cache, smap, eager_iter, EagerAccessException
 
 def test_cached():
     def f(x):
-        sleep(.01)
+        sleep(.002)
         return x
 
     cache_size = 3
-    arr = [random.random() for _ in range(50)]
+    arr = [random.random() for _ in range(25)]
     y = smap(f, arr)
     z = add_cache(y, cache_size)
 
@@ -50,10 +50,10 @@ def test_cached():
 @pytest.mark.parametrize("method", ["thread"])
 def test_eager_iter(method):
     def f1(x):
-        sleep(.01)
+        sleep(.005)
         return x
 
-    arr = list(range(1000))
+    arr = list(range(100))
     y = smap(f1, arr)
 
     t1 = time()
@@ -61,12 +61,12 @@ def test_eager_iter(method):
     t2 = time()
 
     t3 = time()
-    z = list(eager_iter(y, nworkers=4, max_buffered=20, method=method))
+    z = list(eager_iter(y, nworkers=2, max_buffered=20, method=method))
     t4 = time()
 
     assert all(x_ == z_ for x_, z_ in zip(arr, z))
     speedup = (t2 - t1) / (t4 - t3)
-    assert speedup > 2.5  # be conservative for travis busy machines...
+    assert speedup > 1.5  # be conservative for travis busy machines...
 
 
 @pytest.mark.timeout(10)

@@ -12,7 +12,7 @@ API Reference
 
    add_cache
    eager_iter
-   reindex
+   take
    cycle
    repeat
    smap
@@ -35,7 +35,7 @@ Indexing and reshaping
 
 .. autofunction:: concatenate
 .. autofunction:: collate
-.. autofunction:: reindex
+.. autofunction:: take
 .. autofunction:: cycle
 .. autofunction:: repeat
 

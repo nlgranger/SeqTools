@@ -1,6 +1,6 @@
 import random
 import pytest
-from seqtools import smap
+from seqtools import smap, starmap
 
 
 def test_smap_basics():
@@ -39,3 +39,29 @@ def test_smap_exceptions():
 
     with pytest.raises(CustomException):
         next(iter(m))
+
+    with pytest.raises(TypeError):
+        smap(None, data)
+
+    with pytest.raises(ValueError):
+        smap(do)
+
+
+def test_starmap():
+    n = 100
+    data = [(random.random(),) for _ in range(n)]
+
+    def do(x):
+        do.call_cnt += 1
+        return x + 1
+
+    do.call_cnt = 0
+
+    # indexing
+    result = starmap(do, data)
+    assert len(result) == len(data)
+    assert do.call_cnt == 0
+    assert list(result) == [x + 1 for (x,) in data]
+    assert do.call_cnt == n
+    assert [result[i] for i in range(len(result))] == [x + 1 for (x,) in data]
+    assert list(result[:]) == [x + 1 for (x,) in data]
