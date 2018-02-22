@@ -1,8 +1,11 @@
+import sys
 import multiprocessing
+try:
+    import multiprocessing.queues
+except ImportError:
+    pass
 import threading
 import queue
-import pickle as pkl
-import sys
 from collections import OrderedDict
 from typing import Sequence
 from future.utils import raise_from, raise_with_traceback
@@ -68,23 +71,18 @@ def iter_worker(sequence, q_in, q_out):
 
         try:
             v = sequence[si]
+            q_out.put((si, v))
 
         except Exception:
             try:  # try to add information
                 _, ev, tb = sys.exc_info()
-                ev = pkl.loads(pkl.dumps(ev))
-                tb = pkl.loads(pkl.dumps(tblib.Traceback(tb)))
+                q_out.put((None, (si, ev, tblib.Traceback(tb))))
 
             except Exception:  # nothing more we can do
                 q_out.put((None, (si, None, None)))
-                return
 
-            else:
-                q_out.put((None, (si, ev, tb)))
+            finally:
                 return
-
-        else:
-            q_out.put((si, v))
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
@@ -132,7 +130,10 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
         worker_type = threading.Thread
 
     elif method == 'proc':
-        queue_type = multiprocessing.Queue
+        if sys.version_info >= (3, 4):
+            queue_type = multiprocessing.SimpleQueue
+        else:
+            queue_type = multiprocessing.queues.SimpleQueue
         worker_type = multiprocessing.Process
 
     elif method == 'basic':
@@ -144,8 +145,8 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     else:
         queue_type, worker_type = method
 
-    q_in = queue_type(max_buffered)
-    q_out = queue_type(max_buffered)
+    q_in = queue_type()
+    q_out = queue_type()
 
     ring_buffer = [None] * max_buffered  # storage for result values
     done = [False] * max_buffered

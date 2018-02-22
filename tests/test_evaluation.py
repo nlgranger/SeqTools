@@ -33,7 +33,7 @@ def test_cached():
     t4 = time()
 
     speedup = (t2 - t1) / (t4 - t3)
-    assert speedup > 1.9
+    assert speedup > 1.8
 
     arr = list(range(100))
     z = add_cache(arr, cache_size)
@@ -47,13 +47,13 @@ def test_cached():
 
 
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread"])
+@pytest.mark.parametrize("method", ["thread", "proc"])
 def test_eager_iter(method):
     def f1(x):
-        sleep(.005)
+        sleep(.05)
         return x
 
-    arr = list(range(100))
+    arr = list(range(50))
     y = smap(f1, arr)
 
     t1 = time()
@@ -61,12 +61,12 @@ def test_eager_iter(method):
     t2 = time()
 
     t3 = time()
-    z = list(eager_iter(y, nworkers=2, max_buffered=20, method=method))
+    z = list(eager_iter(y, nworkers=3, max_buffered=20, method=method))
     t4 = time()
 
     assert all(x_ == z_ for x_, z_ in zip(arr, z))
     speedup = (t2 - t1) / (t4 - t3)
-    assert speedup > 1.5  # be conservative for travis busy machines...
+    assert speedup > 2  # hopefully more in practice...
 
 
 @pytest.mark.timeout(10)
