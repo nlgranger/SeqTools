@@ -64,9 +64,9 @@ def basic_setitem(f):
 
 
 def normalize_slice(start, stop, step, n):
-    start = 0 if start is None else start
-    stop = n if stop is None else stop
     step = 1 if step is None else step
+    start = start if start is not None else 0 if step > 0 else n - 1
+    stop = stop if stop is not None else n if step > 0 else 0
 
     if step == 0:
         raise ValueError("slice step cannot be 0")
