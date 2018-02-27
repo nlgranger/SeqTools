@@ -44,12 +44,12 @@ class CachedSequence(Sequence):
             self.cache[key] = value
 
     def __iter__(self):
-        # Bypass cache as it will be useless
+        # bypass cache as it will be useless
         return iter(self.sequence)
 
 
 def add_cache(arr, cache_size=1):
-    """Add cache to skip evaluation for the most recently accessed items.
+    """Adds cache to skip evaluation for the most recently accessed items.
 
     :param arr:
         Sequence to provide a cache for.
@@ -73,21 +73,20 @@ def iter_worker(sequence, q_in, q_out):
             v = sequence[si]
             q_out.put((si, v))
 
-        except Exception:
+        except BaseException:
             try:  # try to add information
                 _, ev, tb = sys.exc_info()
                 q_out.put((None, (si, ev, tblib.Traceback(tb))))
 
-            except Exception:  # nothing more we can do
+            except BaseException:  # nothing more we can do
                 q_out.put((None, (si, None, None)))
 
-            finally:
-                return
+            return
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
-    """Return an iterator over the sequence backed by multiple workers in order
-    to fetch values ahead.
+    """Returns an iterator over the sequence backed by multiple workers in
+    order to fetch values ahead.
 
     :param sequence:
         a sequence of values to iterate over

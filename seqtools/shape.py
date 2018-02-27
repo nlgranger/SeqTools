@@ -34,7 +34,7 @@ class Collation(Sequence):
 
 
 def collate(sequences):
-    """Return a view on the collated/pasted/stacked sequences.
+    """Returns a view on the collated/pasted/stacked sequences.
 
     The n'th element is a tuple of the n'th elements from each sequence.
 
@@ -76,7 +76,7 @@ class Concatenation(Sequence):
 
 
 def concatenate(sequences):
-    """Return a view on the concatenated sequences."""
+    """Returns a view on the concatenated sequences."""
     return Concatenation(sequences)
 
 
@@ -132,7 +132,7 @@ class BatchView(Sequence):
 
 
 def batches(sequence, k, drop_last=False, pad=None, collate_fn=None):
-    """Return a view of a sequence in groups of k items.
+    """Returns a view of a sequence in groups of k items.
 
     :param sequence:
         the input sequence
@@ -185,7 +185,7 @@ class Split(Sequence):
 
 
 def split(sequence, edges):
-    """Split a sequence into subsequences
+    """Splits a sequence into subsequences.
 
     :param sequence:
         the input sequence

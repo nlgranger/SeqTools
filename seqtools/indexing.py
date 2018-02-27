@@ -63,7 +63,7 @@ class Reindexing(Sequence):
 
 
 def take(sequence, indexes):
-    """Return a view on the sequence reordered by indexes."""
+    """Returns a view on the sequence reordered by indexes."""
     return Reindexing(sequence, indexes)
 
 
@@ -128,7 +128,7 @@ class InfiniteCycle(Iterable):
 
 
 def cycle(sequence, limit=None):
-    """Return a view of the repeated sequence with an optional size limit."""
+    """Returns a view of the repeated sequence with an optional size limit."""
     if limit is None:
         return InfiniteCycle(sequence)
     else:
@@ -231,7 +231,9 @@ class InfiniteRepetition(Iterable):
 
 
 def repeat(value, times=None):
-    """Return a view of the repeated value with an optional size limit."""
+    """Returns a sequence repeating the given value with an optional size
+    limit.
+    """
     if isint(times) and times > 1:
         return Repetition(value, times)
     elif times is None:

@@ -46,7 +46,7 @@ class Mapping(Sequence):
 
 
 def smap(f, *sequence):
-    """Return mapping of `f` over a sequence.
+    """Returns a mapping of `f` over the sequence(s).
 
     Equivalent to :code:`[f(x) for x in sequence]` with on-demand evaluation.
 

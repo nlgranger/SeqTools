@@ -12,11 +12,10 @@ else:
 
 
 class SerializableFunc:
-    """Make a function independent from modifications of the source code.
+    """Make a function independent from its source file.
 
     This decorator alters the serialization hook so that unpickling the
-    function will import a backed-up version of the module containing the
-    function.
+    pickled function will import a back-up of the original source code.
 
     .. warning::
         This is a hackish solution where only the source file containing the
