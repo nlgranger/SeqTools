@@ -67,6 +67,7 @@ def test_eager_iter(method):
     assert all(x_ == z_ for x_, z_ in zip(arr, z))
     speedup = (t2 - t1) / (t4 - t3)
     assert speedup > 2  # hopefully more in practice...
+    print(speedup)
 
 
 @pytest.mark.timeout(10)

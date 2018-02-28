@@ -1,26 +1,32 @@
 import sys
-import multiprocessing
-try:
-    import multiprocessing.queues
-except ImportError:
-    pass
-import threading
-import queue
-from collections import OrderedDict
 from typing import Sequence
-from future.utils import raise_from, raise_with_traceback
-from .common import basic_getitem, basic_setitem
-
+import multiprocessing
+import threading
+from collections import OrderedDict
+import pickle as pkl
+import traceback
+try:
+    from multiprocessing import SimpleQueue
+except ImportError:
+    from multiprocessing.queues import SimpleQueue
+try:
+    from queue import Queue
+except ImportError:
+    from Queue import Queue
 try:
     import tblib
 except ImportError:
     tblib = None
 
+from future.utils import raise_from, raise_with_traceback
+
+from .common import basic_getitem, basic_setitem
+
 
 class CachedSequence(Sequence):
-    def __init__(self, sequence, cache_size=1):
+    def __init__(self, sequence, cache_size=1, cache=None):
         self.sequence = sequence
-        self.cache = OrderedDict()
+        self.cache = cache or OrderedDict()
         self.cache_size = cache_size
 
     def __len__(self):
@@ -48,40 +54,58 @@ class CachedSequence(Sequence):
         return iter(self.sequence)
 
 
-def add_cache(arr, cache_size=1):
+def add_cache(arr, cache_size=1, cache=None):
     """Adds cache to skip evaluation for the most recently accessed items.
 
     :param arr:
         Sequence to provide a cache for.
     :param cache_size:
         Maximum number of cached values.
+    :param cache:
+        The container to use as cache
     """
-    return CachedSequence(arr, cache_size)
+    return CachedSequence(arr, cache_size, cache)
 
 
 class EagerAccessException(RuntimeError):
     pass
 
 
-def iter_worker(sequence, q_in, q_out):
-    while True:
-        si = q_in.get()
-        if si is None:  # stop on sentinel value
+def iter_worker(pid, sequence, outbuf, q_in, q_out, errbuf):
+    si = 0
+
+    try:
+        while True:
+            # print("w{} reading value".format(pid))
+            si, bi = q_in.get()
+            if si < 0:  # stop on sentinel value
+                return
+
+            outbuf[bi] = sequence[si]
+            q_out.put((si, bi))
+
+    except Exception as e:
+        try:  # try to add information
+            et, ev, tb = sys.exc_info()
+            tb = tblib.Traceback(tb)
+            pkl.dumps((et, ev, tb))  # check we can transmit error
+
+            errbuf[pid] = (et, ev, tb)
+            q_out.put((-si - 1, pid))
+
+            raise e
+
+        except Exception as e:  # nothing more we can do
+            errbuf[pid] = (None, None, traceback.format_exc(20))
+            q_out.put((-si - 1, pid))
+
+            raise e
+
+        finally:
             return
 
-        try:
-            v = sequence[si]
-            q_out.put((si, v))
-
-        except BaseException:
-            try:  # try to add information
-                _, ev, tb = sys.exc_info()
-                q_out.put((None, (si, ev, tblib.Traceback(tb))))
-
-            except BaseException:  # nothing more we can do
-                q_out.put((None, (si, None, None)))
-
-            return
+    finally:  # silence logging since we handle errors ourselves
+        return
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
@@ -125,15 +149,17 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     nworkers = min(nworkers, max_buffered)
 
     if method == 'thread':
-        queue_type = queue.Queue
+        queue_type = Queue
         worker_type = threading.Thread
+        outbuf = [None] * max_buffered
+        errbuf = [None] * nworkers
 
     elif method == 'proc':
-        if sys.version_info >= (3, 4):
-            queue_type = multiprocessing.SimpleQueue
-        else:
-            queue_type = multiprocessing.queues.SimpleQueue
+        queue_type = SimpleQueue
         worker_type = multiprocessing.Process
+        manager = multiprocessing.Manager()
+        outbuf = manager.list([None] * max_buffered)
+        errbuf = manager.list([None] * nworkers)
 
     elif method == 'basic':
         for y in sequence:
@@ -142,64 +168,70 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
         raise StopIteration
 
     else:
-        queue_type, worker_type = method
+        queue_type, worker_type, outbuf, errbuf = method
+        if len(outbuf) < max_buffered:
+            raise ValueError("buffer is too small")
 
     q_in = queue_type()
     q_out = queue_type()
 
-    ring_buffer = [None] * max_buffered  # storage for result values
     done = [False] * max_buffered
     n = len(sequence)
     workers = []
 
     try:
         if method == 'thread':
-            for _ in range(nworkers):
+            for pid in range(nworkers):
                 workers.append(worker_type(
-                    target=iter_worker, args=(sequence, q_in, q_out)))
+                    target=iter_worker,
+                    args=(pid, sequence, outbuf, q_in, q_out, errbuf)))
         else:
-            for _ in range(nworkers):
+            for pid in range(nworkers):
                 workers.append(worker_type(
-                    target=iter_worker, args=(sequence, q_in, q_out)))
+                    target=iter_worker,
+                    args=(pid, sequence, outbuf, q_in, q_out, errbuf)))
 
         for w in workers:
             w.start()
 
         for j in range(min(max_buffered, n)):
-            q_in.put(j)
+            q_in.put((j, j))
 
         i = 0  # sequence index
         while i < n:
-            si_, v = q_out.get()
+            si, bi = q_out.get()
 
-            if si_ is None:
-                si_, ev, tb = v
+            if si >= 0:
+                done[si % max_buffered] = True
+
+                # return computed values
+                while done[i % max_buffered]:
+                    yield outbuf[i % max_buffered]
+
+                    # schedule next value in released slot
+                    done[i % max_buffered] = False
+                    if i + max_buffered < n:
+                        si = i + max_buffered
+                        bi = (i + max_buffered) % max_buffered
+                        q_in.put((si, bi))
+
+                    i += 1
+
+            else:
+                si = -si - 1
+                et, ev, tb = errbuf[bi]
 
                 if ev is not None:
                     try:
                         raise_with_traceback(ev, tb.as_traceback())
                     except Exception as e_reason:
                         e = EagerAccessException(
-                            "failed to get item {}".format(si_))
+                            "failed to get item {}".format(si))
                         raise_from(e, e_reason)
 
                 else:
                     raise EagerAccessException(
-                        "failed to get item {}".format(si_))
-
-            ring_buffer[si_ % max_buffered] = v
-            done[si_ % max_buffered] = True
-
-            # Return computed values
-            while done[i % max_buffered]:
-                yield ring_buffer[i % max_buffered]
-                done[i % max_buffered] = False
-
-                # schedule next value in released slot
-                if i + max_buffered < n:
-                    q_in.put(i + max_buffered)
-
-                i += 1
+                        "failed to get item {}".format(si))
 
     except Exception as e:
         raise e
@@ -208,6 +240,6 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
         while not q_out.empty():  # drain active jobs
             q_out.get()
         for _ in range(nworkers):  # inject sentinel values
-            q_in.put(None)
+            q_in.put((-1, -1))
         for p in workers:  # wait for termination
             p.join()
