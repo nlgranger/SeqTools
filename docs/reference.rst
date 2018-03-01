@@ -38,6 +38,8 @@ Indexing and reshaping
 .. autofunction:: take
 .. autofunction:: cycle
 .. autofunction:: repeat
+.. autofunction:: batches
+.. autofunction:: split
 
 
 Evaluation

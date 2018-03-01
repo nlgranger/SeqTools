@@ -198,7 +198,7 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
 
             else:
                 si = -si - 1
-                et, ev, tb = errbuf[bi]
+                _, ev, tb = errbuf[bi]
 
                 if ev is not None:
                     try:
