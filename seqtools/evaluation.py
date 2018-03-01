@@ -1,18 +1,11 @@
 import sys
 from typing import Sequence
 import multiprocessing
+import multiprocessing.sharedctypes
 import threading
 from collections import OrderedDict
-import pickle as pkl
 import traceback
-try:
-    from multiprocessing import SimpleQueue
-except ImportError:
-    from multiprocessing.queues import SimpleQueue
-try:
-    from queue import Queue
-except ImportError:
-    from Queue import Queue
+from queue import Queue
 try:
     import tblib
 except ImportError:
@@ -20,7 +13,7 @@ except ImportError:
 
 from future.utils import raise_from, raise_with_traceback
 
-from .common import basic_getitem, basic_setitem
+from .common import basic_getitem, basic_setitem, SharedCtypeQueue
 
 
 class CachedSequence(Sequence):
@@ -39,7 +32,7 @@ class CachedSequence(Sequence):
         else:
             value = self.sequence[key]
             if len(self.cache) >= self.cache_size:
-                self.cache.popitem()
+                self.cache.popitem(0)
             self.cache[key] = value
             return value
 
@@ -76,8 +69,8 @@ def iter_worker(pid, sequence, outbuf, q_in, q_out, errbuf):
 
     try:
         while True:
-            # print("w{} reading value".format(pid))
             si, bi = q_in.get()
+
             if si < 0:  # stop on sentinel value
                 return
 
@@ -88,7 +81,7 @@ def iter_worker(pid, sequence, outbuf, q_in, q_out, errbuf):
         try:  # try to add information
             et, ev, tb = sys.exc_info()
             tb = tblib.Traceback(tb)
-            pkl.dumps((et, ev, tb))  # check we can transmit error
+            # pkl.dumps((et, ev, tb))  # TODO: check we can transmit error?
 
             errbuf[pid] = (et, ev, tb)
             q_out.put((-si - 1, pid))
@@ -155,7 +148,8 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
         errbuf = [None] * nworkers
 
     elif method == 'proc':
-        queue_type = SimpleQueue
+        def queue_type():
+            return SharedCtypeQueue(fmt="2i", max_size=max_buffered)
         worker_type = multiprocessing.Process
         manager = multiprocessing.Manager()
         outbuf = manager.list([None] * max_buffered)
@@ -180,22 +174,15 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     workers = []
 
     try:
-        if method == 'thread':
-            for pid in range(nworkers):
-                workers.append(worker_type(
-                    target=iter_worker,
-                    args=(pid, sequence, outbuf, q_in, q_out, errbuf)))
-        else:
-            for pid in range(nworkers):
-                workers.append(worker_type(
-                    target=iter_worker,
-                    args=(pid, sequence, outbuf, q_in, q_out, errbuf)))
-
-        for w in workers:
-            w.start()
-
         for j in range(min(max_buffered, n)):
             q_in.put((j, j))
+
+        for pid in range(nworkers):
+            w = worker_type(
+                target=iter_worker,
+                args=(pid, sequence, outbuf, q_in, q_out, errbuf))
+            w.start()
+            workers.append(w)
 
         i = 0  # sequence index
         while i < n:
@@ -237,8 +224,11 @@ def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
         raise e
 
     finally:  # make sure workers are stopped in all cases
-        while not q_out.empty():  # drain active jobs
-            q_out.get()
+        # drain active jobs
+        while not q_in.empty():
+            q_in.get(timeout=0.05)
+        while not q_out.empty():
+            q_out.get(timeout=0.05)
         for _ in range(nworkers):  # inject sentinel values
             q_in.put((-1, -1))
         for p in workers:  # wait for termination

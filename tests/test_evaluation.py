@@ -7,7 +7,7 @@ from seqtools import add_cache, smap, eager_iter, EagerAccessException
 
 def test_cached():
     def f(x):
-        sleep(.002)
+        sleep(.01)
         return x
 
     cache_size = 3
@@ -15,26 +15,14 @@ def test_cached():
     y = smap(f, arr)
     z = add_cache(y, cache_size)
 
-    assert list(iter(y)) == arr
-    assert [z[i] for i in range(len(z))] == arr
-
     t1 = time()
     for i in range(len(arr)):
-        for j in range(max(0, i - cache_size + 1), i + 1):
-            assert y[j] == arr[j]
-            assert y[j] == arr[j]
-    t2 = time()
-
-    t3 = time()
-    for i in range(len(arr)):
+        assert z[i] == arr[i]
         for j in range(max(0, i - cache_size + 1), i + 1):
             assert z[j] == arr[j]
-            assert z[j - len(arr)] == arr[j]
-    t4 = time()
+    t2 = time()
 
-    speedup = (t2 - t1) / (t4 - t3)
-    assert speedup > 1.8
-
+    assert t2 - t1 < .28
     arr = list(range(100))
     z = add_cache(arr, cache_size)
     z[-10] = -10
@@ -47,27 +35,22 @@ def test_cached():
 
 
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "proc"])
+@pytest.mark.parametrize("method", ["proc"])
 def test_eager_iter(method):
     def f1(x):
         sleep(.05)
         return x
 
-    arr = list(range(50))
+    arr = list(range(121))
     y = smap(f1, arr)
 
     t1 = time()
-    list(iter(y))
+    z = list(eager_iter(y, nworkers=3, max_buffered=20, method=method))
     t2 = time()
 
-    t3 = time()
-    z = list(eager_iter(y, nworkers=3, max_buffered=20, method=method))
-    t4 = time()
-
-    assert all(x_ == z_ for x_, z_ in zip(arr, z))
-    speedup = (t2 - t1) / (t4 - t3)
-    assert speedup > 2  # hopefully more in practice...
-    print(speedup)
+    assert z == arr
+    print(t2 - t1)
+    assert t2 - t1 < 2.05 * 1.3  # hopefully more in practice...
 
 
 @pytest.mark.timeout(10)
@@ -105,3 +88,5 @@ def test_eager_iter_errors(method):
     except Exception as e:
         assert isinstance(e, EagerAccessException)
         assert isinstance(e.__cause__, ValueError)
+    else:
+        assert False
