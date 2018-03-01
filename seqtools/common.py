@@ -1,5 +1,10 @@
+import ctypes
+import struct
 import numbers
 from typing import Sequence
+import multiprocessing
+import queue
+from multiprocessing.sharedctypes import RawArray, RawValue
 
 
 def isint(x):
@@ -120,3 +125,59 @@ class SeqSlice(Sequence):
     @basic_setitem
     def __setitem__(self, key, value):
         self.sequence[self.start + key * self.step] = value
+
+
+class SharedCtypeQueue:
+    """Simplified queue for struct type entities."""
+    def __init__(self, fmt, max_size):
+        self.fmt = fmt
+        self.itemsize = struct.calcsize(fmt)
+        self.max_size = max_size
+        self.startlock = multiprocessing.Lock()
+        self.stoplock = multiprocessing.Lock()
+        self.getsem = multiprocessing.Semaphore(0)
+        self.putsem = multiprocessing.Semaphore(max_size)
+
+        self.values = memoryview(RawArray("b", max_size * self.itemsize))
+        self.start = RawValue(ctypes.c_longlong, 0)
+        self.stop = RawValue(ctypes.c_longlong, 0)
+
+    def get(self, blocking=True, timeout=None):
+        # wait for something to read
+        if not self.getsem.acquire(blocking, timeout):
+            raise queue.Empty()
+
+        # acquire one readable slot
+        self.startlock.acquire()  # ignored timeout should go unnoticed
+        offset = (self.start.value % self.max_size) * self.itemsize
+        self.start.value += 1
+        self.startlock.release()  # safe until putsem is released
+
+        # copy value
+        buf = self.values[offset:offset + self.itemsize]
+        v = struct.unpack(self.fmt, buf)
+
+        # release buffer slot for writing
+        self.putsem.release()
+
+        return v
+
+    def put(self, value, blocking=True, timeout=None):
+        # wait for an empty slot
+        if not self.putsem.acquire(blocking, timeout):
+            raise queue.Full()
+
+        # take specific slot
+        self.stoplock.acquire()  # ignored timeout should go unnoticed
+        offset = (self.stop.value % self.max_size) * self.itemsize
+
+        try:  # transfer values and update state
+            struct.pack_into(self.fmt, self.values, offset, *value)
+            self.stop.value += 1
+
+        finally:  # release access and notify readers
+            self.stoplock.release()
+            self.getsem.release()
+
+    def empty(self):
+        return self.stop.value == self.start.value
