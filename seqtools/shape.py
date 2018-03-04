@@ -6,7 +6,7 @@ try:
     from itertools import izip as zip  # pylint: disable=redefined-builtin
 except ImportError:
     pass
-from .common import isint, basic_getitem, basic_setitem
+from .utils import isint, basic_getitem, basic_setitem
 
 
 class Collation(Sequence):

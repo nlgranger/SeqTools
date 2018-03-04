@@ -126,8 +126,8 @@ together and fed as distinct arguments to the function:
 Going further
 -------------
 
-To finally compute all the values from a sequence, :func:`eager_iter` provides
-an iterator backed by multiple workers to compute the values more quickly.
+To finally compute all the values from a sequence, :func:`prefetch` provides
+an wrapper backed by multiple workers to compute the values more quickly.
 
 To see the library in practice, you can see how to write a multiprocessing
 capable minibatch iterator written in just 8 lines

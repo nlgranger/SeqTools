@@ -13,7 +13,7 @@ def preprocess_fn(x):
     return x
 
 
-def batch_iter(data, f, buffers, batch_size, drop_last=False, nworkers=0):
+def make_batches(data, f, buffers, batch_size, drop_last=False, nworkers=0):
     """Transfer data to buffers and iterate over minibatches.
 
     :param data:
@@ -43,9 +43,7 @@ def batch_iter(data, f, buffers, batch_size, drop_last=False, nworkers=0):
 
     minibatches = seqtools.smap(batch_copy, data_batches, ring_buffers)
 
-    return seqtools.eager_iter(
-        minibatches, nworkers,
-        max_buffered=len(buffers))
+    return seqtools.prefetch(minibatches, nworkers, max_buffered=len(buffers))
 
 
 raw_data = list(range(100))
@@ -62,7 +60,8 @@ print("sequential iterator took {:.0f}\"".format(t2 - t1))
 # Multithreaded version
 buffers = [array.array('l', [0] * batch_size) for _ in range(5)]
 t1 = time.time()
-for x in batch_iter(raw_data, preprocess_fn, buffers, batch_size, nworkers=4):
-    process_fn(x)
+for b in make_batches(
+        raw_data, preprocess_fn, buffers, batch_size, nworkers=2):
+    process_fn(b)
 t2 = time.time()
 print("multithreaded iterator took: {:.0f}\"".format(t2 - t1))

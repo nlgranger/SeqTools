@@ -30,6 +30,7 @@ setup(
     version='0.8.dev',
     install_requires=[
         'typing;python_version<"3.6"',
+        'backports.weakref;python_version<"3"',
         'future',
     ],
     extras_require={

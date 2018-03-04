@@ -1,7 +1,7 @@
 from typing import Sequence, Iterable
 import itertools
 from array import array
-from .common import isint, basic_getitem, basic_setitem
+from .utils import isint, basic_getitem, basic_setitem
 
 
 class Reindexing(Sequence):

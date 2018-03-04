@@ -162,6 +162,10 @@ class SharedCtypeQueue:
 
         return v
 
+    def get_nowait(self):
+        return self.get(blocking=False)
+
+
     def put(self, value, blocking=True, timeout=None):
         # wait for an empty slot
         if not self.putsem.acquire(blocking, timeout):
@@ -178,6 +182,9 @@ class SharedCtypeQueue:
         finally:  # release access and notify readers
             self.stoplock.release()
             self.getsem.release()
+
+    def put_nowait(self, value):
+        self.put(value, blocking=False)
 
     def empty(self):
         return self.stop.value == self.start.value

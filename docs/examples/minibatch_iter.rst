@@ -63,18 +63,21 @@ be done by mapping a copy-and-return function over the two sequences of blocks:
 Notice the way :func:`seqtools.smap` handles functions with multiple arguments:
 it is the same as the standard :func:`map` function.
 
-The final step is to return a multithreaded iterator with
-:func:`seqtools.eager_iter` to quickly compute and return the minibatches. To make
-sure that the worker are not too greedy and erase a buffer before it has been
-read, the `max_buffered` argument must be set appropriately.
+The final step is to return a multithreaded view with :func:`seqtools.prefetch`
+to quickly retrieve precomputed values. To make sure that the worker are not
+too greedy and erase a buffer before it has been read, the `max_buffered`
+argument must be set appropriately.
 
 .. literalinclude:: minibatch_iter.py
-   :lines: 46-48
+   :lines: 46
 
 Done! Now is testing time:
 
 .. testcode::
- 
+
+   raw_data = list(range(100))
+   batch_size = 10
+
    # Reference
    t1 = time.time()
    for i in range(0, len(raw_data), batch_size):
@@ -84,12 +87,13 @@ Done! Now is testing time:
    print("sequential iterator took {:.0f}\"".format(t2 - t1))
 
    # Multithreaded version
-   buffers = array.array('l', [0] * 50)
+   buffers = [array.array('l', [0] * batch_size) for _ in range(5)]
    t1 = time.time()
-   for x in batch_iter(raw_data, preprocess_fn, buffers, batch_size, nworkers=4):
-       process_fn(x)
+   for b in make_batches(
+           raw_data, preprocess_fn, buffers, batch_size, nworkers=2):
+       process_fn(b)
    t2 = time.time()
-   print("multithreaded iterator took {:.0f}\"".format(t2 - t1))
+   print("multithreaded iterator took: {:.0f}\"".format(t2 - t1))
 
 .. testoutput::
    :options: +SKIP

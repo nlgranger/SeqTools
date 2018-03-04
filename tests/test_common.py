@@ -2,7 +2,7 @@ import pytest
 import queue
 import multiprocessing
 import time
-from seqtools.common import SeqSlice, SharedCtypeQueue
+from seqtools.utils import SeqSlice, SharedCtypeQueue
 
 
 def test_sliceview():
