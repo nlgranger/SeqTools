@@ -11,7 +11,7 @@ API Reference
 .. autosummary::
 
    add_cache
-   eager_iter
+   prefetch
    take
    cycle
    repeat
@@ -44,7 +44,7 @@ Evaluation
 ----------
 
 .. autofunction:: add_cache
-.. autofunction:: eager_iter
+.. autofunction:: prefetch
 .. autoclass:: SerializableFunc
 
 Errors

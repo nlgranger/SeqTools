@@ -1,7 +1,7 @@
 import inspect
 from typing import Sequence
 from future.utils import raise_from
-from .common import basic_getitem
+from .utils import basic_getitem
 
 
 class MappingException(Exception):
