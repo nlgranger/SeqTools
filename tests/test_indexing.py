@@ -1,12 +1,12 @@
 from random import random, randint
 import pytest
-from seqtools import take, cycle, repeat
+from seqtools import gather, cycle, interleave, repeat
 
 
 def test_reindex():
     arr = [random() for _ in range(100)]
     idx = [randint(-len(arr), len(arr) - 1) for _ in range(200)]
-    reindexed = take(arr, idx)
+    reindexed = gather(arr, idx)
     expected = [arr[i] for i in idx]
 
     assert [reindexed[i] for i in range(len(reindexed))] == expected
@@ -27,7 +27,7 @@ def test_reindex():
 
     arr1 = [random() for _ in range(100)]
     arr2 = list(arr1)
-    reindexed = take(arr1, idx)
+    reindexed = gather(arr1, idx)
     reindexed[start:stop:step] = list(range(start, stop, step))
     for i, v in zip(idx[start:stop:step], range(start, stop, step)):
         arr2[i] = v
@@ -46,7 +46,7 @@ def test_reindex():
     arr2 = list(arr1)
     idx2 = [1, 2, -3]
     new_values = [-1, -2, -3]
-    reindexed = take(take(arr1, idx), idx2)
+    reindexed = gather(gather(arr1, idx), idx2)
     for i in range(-1, 2):
         reindexed[i] = new_values[i]
         arr2[idx[idx2[i]]] = new_values[i]
@@ -83,6 +83,23 @@ def test_cycle():
     looped[50:150] = list(range(0, -100, -1))
     assert arr[50:] == list(range(0, -50, -1))
     assert arr[:50] == list(range(-50, -100, -1))
+
+
+def test_interleave():
+    arr1 = [1, 2, 3, 4, 5]
+    arr2 = ['a', 'b', 'c']
+    arr3 = [.1, .2, .3, .4]
+    y = interleave(arr1, arr2, arr3)
+    expected = [1, 'a', .1, 2, 'b', .2, 3, 'c', .3, 4, .4, 5]
+    assert list(y) == expected
+    assert [y[i] for i in range(len(y))] == expected
+
+    y[1] = -1
+    y[3] = -2
+    y[-1] = -3
+    assert arr1 == [1, -2, 3, 4, -3]
+    assert arr2 == [-1, 'b', 'c']
+    assert arr3 == [.1, .2, .3, .4]
 
 
 def test_repeat():

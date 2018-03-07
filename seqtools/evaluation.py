@@ -305,10 +305,10 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
           thread.
     :param direction:
         a tuple with an initial value and a function taking the current index
-        and returning the next item to prefetch. Default to monotonic
-        progress with step 1.
+        and returning the next item to prefetch. Defaults to monotonic
+        progress with step 1 starting from 0.
     :param idle_timout:
-        number of seconds to wait before idle workers go to sleep.
+        number of seconds to wait before putting idle workers to sleep.
 
     .. note::
         Exceptions raised in the workers while reading the sequence values will

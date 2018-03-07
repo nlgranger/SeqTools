@@ -73,7 +73,7 @@ because the intermediate results are stored for only one element at a time:
 >>> y2 = seqtools.smap(g, y1)
 >>>
 >>> # computing one of the output values only uses sizeof(float) * 10000
->>> # whereas explicitely computing y1 would take sizeof(float) * 10000 * 2000
+>>> # whereas explicitely computing y1 would gather sizeof(float) * 10000 * 2000
 >>> y2[2]
 2.0
 
@@ -96,10 +96,10 @@ simplicity of slice-based indexing:
 
 Where it makes sense, transformed sequences also support index and slice based
 assignment so as to make the objects truely behave like lists. For example with
-the :func:`take` function:
+the :func:`gather` function:
 
 >>> arr = [0, 1, 2, 3, 4, 5]
->>> y = seqtools.take(arr, [1, 1, 3, 4])
+>>> y = seqtools.gather(arr, [1, 1, 3, 4])
 >>> list(y)
 [1, 1, 3, 4]
 >>> y[0] = -1

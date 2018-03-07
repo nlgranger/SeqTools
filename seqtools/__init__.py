@@ -1,10 +1,10 @@
 from .evaluation import add_cache, EagerAccessException, prefetch
-from .indexing import take, cycle, repeat
+from .indexing import gather, cycle, interleave, repeat
 from .mapping import smap, starmap
 from .serialization import SerializableFunc
 from .shape import collate, concatenate, batches, split
 
 __all__ = ['add_cache', 'prefetch',
-           'take', 'cycle', 'repeat',
+           'gather', 'cycle', 'interleave', 'repeat',
            'smap', 'starmap',
            'collate', 'concatenate', 'batches', 'split']

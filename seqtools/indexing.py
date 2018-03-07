@@ -1,5 +1,6 @@
 from typing import Sequence, Iterable
 import itertools
+import bisect
 from array import array
 from .utils import isint, basic_getitem, basic_setitem
 
@@ -62,7 +63,7 @@ class Reindexing(Sequence):
                 "slices, not " + key.__class__.__name__)
 
 
-def take(sequence, indexes):
+def gather(sequence, indexes):
     """Returns a view on the sequence reordered by indexes."""
     return Reindexing(sequence, indexes)
 
@@ -133,6 +134,74 @@ def cycle(sequence, limit=None):
         return InfiniteCycle(sequence)
     else:
         return Cycle(sequence, limit)
+
+
+class Interleaving(Sequence):
+    def __init__(self, sequences):
+        offsets_in = [0]  # end of sequences in input indexing
+        offsets_out = [0]  # end of sequences in output indexing
+        whose_offset = sorted(range(len(sequences)),
+                              key=lambda k: len(sequences[k]))
+
+        for i, n_seq_left in zip(whose_offset, range(len(sequences), 0, -1)):
+            n_new_out_items = (len(sequences[i]) - offsets_in[-1]) * n_seq_left
+            offsets_out.append(offsets_out[-1] + n_new_out_items)
+            offsets_in.append(len(sequences[i]))
+
+        self.sequences = sequences
+        self.n_seqs = len(sequences)
+        self.offsets_in = array('i', offsets_in)
+        self.offsets_out = array('i', offsets_out)
+        self.remaining_seqs = [sorted(whose_offset[i:])
+                               for i in range(len(sequences))]
+
+    def __len__(self):
+        return sum(map(len, self.sequences))
+
+    def _convert_1d_key(self, key):
+        # given index in interleaved sequences, return sequence and offset
+        n_exhausted = bisect.bisect(self.offsets_out, key) - 1
+        n_remaining_seqs = self.n_seqs - n_exhausted
+        key -= self.offsets_out[n_exhausted]
+        seq = self.remaining_seqs[n_exhausted][key % n_remaining_seqs]
+        idx = self.offsets_in[n_exhausted] + key // n_remaining_seqs
+        return seq, idx
+
+    @basic_getitem
+    def __getitem__(self, key):
+        seq, idx = self._convert_1d_key(key)
+        return self.sequences[seq][idx]
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        seq, idx = self._convert_1d_key(key)
+        self.sequences[seq][idx] = value
+
+    def __iter__(self):
+        iterators = [iter(s) for s in self.sequences]
+        i = -1
+        while len(iterators) > 0:
+            i = (i + 1) % len(iterators)
+            try:
+                yield next(iterators[i])
+            except StopIteration:
+                del iterators[i]
+                i -= 1
+
+
+def interleave(*sequences):
+    """Interleaves elements from several sequences into one.
+
+    .. note: the sequences need not be the same length, the cycling over the
+    sequences will automaticaly operate on the remaining sequences at the end.
+
+    >>> arr1 = [1, 2, 3, 4, 5]
+    >>> arr2 = ['a', 'b', 'c']
+    >>> arr3 = [.1, .2, .3, .4]
+    >>> list(interleave(arr1, arr2, arr3))
+    [1, 'a', .1, 2, 'b', .2, 3, 'c', .3, 4, .4, 5]
+    """
+    return Interleaving(sequences)
 
 
 class Repetition(Sequence):

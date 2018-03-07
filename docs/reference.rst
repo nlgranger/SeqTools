@@ -12,7 +12,7 @@ API Reference
 
    add_cache
    prefetch
-   take
+   gather
    cycle
    repeat
    smap
@@ -35,7 +35,7 @@ Indexing and reshaping
 
 .. autofunction:: concatenate
 .. autofunction:: collate
-.. autofunction:: take
+.. autofunction:: gather
 .. autofunction:: cycle
 .. autofunction:: repeat
 .. autofunction:: batches
