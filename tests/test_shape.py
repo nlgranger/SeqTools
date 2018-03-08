@@ -1,5 +1,5 @@
 from random import random, randint
-from seqtools import collate, concatenate, batches, split
+from seqtools import collate, concatenate, batch, split
 import pytest
 
 
@@ -39,21 +39,21 @@ def test_concatenate():
 def test_blockview():
     arr = list(range(137))
 
-    chunked = list(batches(arr, 5, True))
+    chunked = list(batch(arr, 5, True))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)]
     assert chunked == expected
 
-    chunked = list(batches(arr, 5, False))
+    chunked = list(batch(arr, 5, False))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
         + [[135, 136]]
     assert chunked == expected
 
-    chunked = list(batches(arr, 5, pad=0, collate_fn=list))
+    chunked = list(batch(arr, 5, pad=0, collate_fn=list))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
         + [[135, 136, 0, 0, 0]]
     assert chunked == expected
 
-    chunked = batches(arr, 5, pad=0, collate_fn=list)
+    chunked = batch(arr, 5, pad=0, collate_fn=list)
     chunked[:1] = [[-1, -2, -3, -4, -5]]
     assert arr == [-1, -2, -3, -4, -5] + list(range(5, 137))
 
@@ -66,6 +66,10 @@ def test_split():
     assert list(y) == [list(range(i, i + 25)) for i in range(0, 125, 25)]
 
     y = split(arr, list(range(25, 125, 25)))
+    assert y[-1] == list(range(100, 125))
+    assert list(y) == [list(range(i, i + 25)) for i in range(0, 125, 25)]
+
+    y = split(arr, [(i, i + 25) for i in range(0, 125, 25)])
     assert y[-1] == list(range(100, 125))
     assert list(y) == [list(range(i, i + 25)) for i in range(0, 125, 25)]
 

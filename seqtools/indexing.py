@@ -192,14 +192,16 @@ class Interleaving(Sequence):
 def interleave(*sequences):
     """Interleaves elements from several sequences into one.
 
-    .. note: the sequences need not be the same length, the cycling over the
-    sequences will automaticaly operate on the remaining sequences at the end.
+    .. note:
+       the sequences need not be the same length, the cycling over the
+       sequences will automaticaly operate on the remaining sequences at the
+       end.
 
     >>> arr1 = [1, 2, 3, 4, 5]
     >>> arr2 = ['a', 'b', 'c']
     >>> arr3 = [.1, .2, .3, .4]
     >>> list(interleave(arr1, arr2, arr3))
-    [1, 'a', .1, 2, 'b', .2, 3, 'c', .3, 4, .4, 5]
+    [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
     """
     return Interleaving(sequences)
 

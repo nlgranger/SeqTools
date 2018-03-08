@@ -47,7 +47,7 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
-        "Development Status :: 3 - Alpha"
+        "Development Status :: 3 - Alpha",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research"

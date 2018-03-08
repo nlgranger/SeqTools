@@ -10,17 +10,19 @@ API Reference
 
 .. autosummary::
 
-   add_cache
-   prefetch
-   gather
-   cycle
-   repeat
-   smap
-   starmap
-   collate
-   concatenate
-   batches
-   split
+    add_cache
+    batch
+    collate
+    concatenate
+    cycle
+    gather
+    interleave
+    prefetch
+    repeat
+    smap
+    split
+    starmap
+    unbatch
 
 
 Mapping
@@ -33,12 +35,14 @@ Mapping
 Indexing and reshaping
 ----------------------
 
+.. autofunction:: gather
 .. autofunction:: concatenate
 .. autofunction:: collate
-.. autofunction:: gather
+.. autofunction:: interleave
 .. autofunction:: cycle
 .. autofunction:: repeat
-.. autofunction:: batches
+.. autofunction:: batch
+.. autofunction:: unbatch
 .. autofunction:: split
 
 

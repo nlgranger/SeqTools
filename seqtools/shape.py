@@ -1,12 +1,13 @@
 from typing import Sequence
-from array import array
+import array
+import itertools
 import bisect
 from logging import warning
 try:
     from itertools import izip as zip  # pylint: disable=redefined-builtin
 except ImportError:
     pass
-from .utils import isint, basic_getitem, basic_setitem
+from .utils import isint, clip, basic_getitem, basic_setitem
 
 
 class Collation(Sequence):
@@ -57,7 +58,7 @@ class Concatenation(Sequence):
             else:
                 self.sequences.append(s)
 
-        self.offsets = array('L', [0] + [len(s) for s in self.sequences])
+        self.offsets = array.array('L', [0] + [len(s) for s in self.sequences])
         for i in range(1, len(self.sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
@@ -100,11 +101,10 @@ class BatchView(Sequence):
     @basic_getitem
     def __getitem__(self, key):
         result = self.sequence[key * self.k:(key + 1) * self.k]
-        if key == len(self.sequence) // self.k:  # incomplete block
-            if self.pad is not None:
-                result = concatenate([
-                    result,
-                    [self.pad] * (self.k - len(self.sequence) % self.k)])
+
+        if key == len(self.sequence) // self.k and self.pad is not None:
+            pad_size = (self.k - len(self.sequence) % self.k)
+            result = concatenate((result, [self.pad] * pad_size))
 
         if self.collate_fn is not None:
             result = self.collate_fn(result)
@@ -131,7 +131,7 @@ class BatchView(Sequence):
             self.sequence[i] = v
 
 
-def batches(sequence, k, drop_last=False, pad=None, collate_fn=None):
+def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
     """Returns a view of a sequence in groups of k items.
 
     :param sequence:
@@ -146,10 +146,42 @@ def batches(sequence, k, drop_last=False, pad=None, collate_fn=None):
         block to k elements, set to `None` to prevent padding and return
         an incomplete block anyways.
     :param collate_fn:
-        an optional function to apply to the list of block elements before
-        returning them.
+        an optional function that takes a sequence of items and
+        returns a consolidated batch.
     """
     return BatchView(sequence, k, drop_last, pad, collate_fn)
+
+
+class Unbatching:
+    def __init__(self, sequence, batch_size, last_batch_size=None):
+        self.sequence = sequence
+        self.batch_size = batch_size
+        self.last_batch_size = last_batch_size or batch_size
+
+    def __len__(self):
+        return max(0, len(self.sequence) - 1) * self.batch_size \
+            + self.last_batch_size
+
+    @basic_getitem
+    def __getitem__(self, key):
+        b, i = key // self.batch_size, key % self.batch_size
+        return self.sequence[b][i]
+
+    def __iter__(self):
+        return itertools.islice(self.sequence, len(self))
+
+
+def unbatch(sequence, batch_size, last_batch_size=None):
+    """Recomposes a sequence of batched items.
+
+    :param sequence:
+        A sequence of batches
+    :param batch_size:
+        The size of the batches, except for the last one which can be smaller.
+    :param last_batch_size:
+        The size for the last batch if it is smaller than `batch_size`
+    """
+    return Unbatching(sequence, batch_size, last_batch_size)
 
 
 class Split(Sequence):
@@ -159,42 +191,61 @@ class Split(Sequence):
         if isint(edges):
             if n / (edges + 1) % 1 != 0:
                 raise ValueError("edges must divide the size of the sequence")
-            edges = array('L', range(0, n + 1, n // (edges + 1)))
+            step = n // (edges + 1)
+            self.starts = array.array('L', range(0, n, step))
+            self.stops = array.array('L', range(step, n + 1, step))
+
+        elif isint(edges[0]):
+            self.starts = array.array('L')
+            self.stops = array.array('L')
+            for e in edges:
+                start = self.stops[-1] if len(self.stops) > 0 else 0
+                stop = e
+
+                self.starts.append(clip(start, 0, n - 1))
+                self.stops.append(clip(stop, 0, n))
+
+            self.starts.append(self.stops[-1])
+            self.stops.append(n)
 
         else:
-            edges = array('L', [0] + [max(0, min(e, n)) for e in edges] + [n])
+            self.starts = array.array('L')
+            self.stops = array.array('L')
+            for start, stop in edges:
+                self.starts.append(clip(start, 0, n - 1))
+                self.stops.append(clip(stop, 0, n))
 
         self.sequence = sequence
-        self.edges = edges
 
     def __len__(self):
-        return len(self.edges) - 1
+        return len(self.starts)
 
     @basic_getitem
     def __getitem__(self, key):
-        return self.sequence[self.edges[key]:self.edges[key + 1]]
+        return self.sequence[self.starts[key]:self.stops[key]]
 
     @basic_setitem
     def __setitem__(self, key, value):
-        if len(value) != self.edges[key + 1] - self.edges[key]:
+        start, stop = self.starts[key], self.stops[key]
+        if len(value) != stop - start:
             raise ValueError(
                 self.__class__.__name__ +
                 " only supports one-to-one assignment")
 
-        self.sequence[self.edges[key]:self.edges[key + 1]] = value
+        self.sequence[start:stop] = value
 
 
 def split(sequence, edges):
     """Splits a sequence into subsequences.
 
     :param sequence:
-        the input sequence
+        Input sequence.
     :param edges:
-        `edges can be of two types:
-        - a 1D array that contains the indexes where the sequence
-          should be cut, the beginning and the end of the sequence are
-          implicit.
-        - an int specifies how many cuts of equal size should be done, in which
-          case `edges + 1` must divide the length of the sequence.
+        `edges` can be of two types:
+          - a 1D array that contains the indexes where the sequence
+            should be cut, the beginning and the end of the sequence are
+            implicit.
+          - an int specifies how many cuts of equal size should be done, in
+            which case `edges + 1` must divide the length of the sequence.
     """
     return Split(sequence, edges)
