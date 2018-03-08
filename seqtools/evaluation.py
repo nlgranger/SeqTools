@@ -77,7 +77,8 @@ def _worker(pid, sequence, outbuf, errbuf, q_in, q_out, idle_timout):
         while True:
             try:
                 si, bi = q_in.get(timeout=idle_timout)
-            except queue.Empty:
+
+            except queue.Empty:  # go to sleep
                 q_out.put((-1, pid))
                 return
 
@@ -88,17 +89,16 @@ def _worker(pid, sequence, outbuf, errbuf, q_in, q_out, idle_timout):
             q_out.put((si, bi))
 
     except Exception:
-        # noinspection PyBroadException
-        try:  # try to add information
+        try:
             et, ev, tb = sys.exc_info()
             tb = tblib.Traceback(tb)
-            # pkl.dumps((et, ev, tb))  # TODO: check we can transmit error?
 
-            errbuf[pid] = (et, ev, tb)
-            q_out.put((-si - 2, pid))
-
-        except Exception:  # nothing more we can do
+            # minimal traceback information
             errbuf[pid] = (None, None, traceback.format_exc(20))
+            # this one may fail if ev is not picklable
+            errbuf[pid] = (et, ev, tb)
+
+        finally:
             q_out.put((-si - 2, pid))
 
     finally:  # silence logging since we handle errors ourselves
@@ -118,22 +118,22 @@ class Prefetcher(Sequence):
         nworkers = min(nworkers, max_buffered)
 
         if method == 'thread':
-            queue_type = queue.Queue
-            worker_type = threading.Thread
+            q_in = queue.Queue(maxsize=max_buffered)
+            q_out = queue.Queue(maxsize=max_buffered)
+            start_worker = threading.Thread
             outbuf = [None] * max_buffered
             errbuf = [None] * nworkers
 
         elif method == 'proc':
-            def queue_type():
-                return SharedCtypeQueue(fmt="2i", max_size=max_buffered)
-
-            worker_type = multiprocessing.Process
+            q_in = SharedCtypeQueue(fmt="2i", max_size=max_buffered)
+            q_out = SharedCtypeQueue(fmt="2i", max_size=max_buffered)
+            start_worker = multiprocessing.Process
             manager = multiprocessing.Manager()
             outbuf = manager.list([None] * max_buffered)
             errbuf = manager.list([None] * nworkers)
 
         else:
-            queue_type, worker_type, outbuf, errbuf = method
+            q_in, q_out, start_worker, outbuf, errbuf = method
             if len(outbuf) < max_buffered:
                 raise ValueError("buffer is too small")
 
@@ -145,18 +145,18 @@ class Prefetcher(Sequence):
         self.sequence = sequence
         self.workers = []
         self.max_buffered = max_buffered
-        self.worker_type = worker_type
-        self.q_in = queue_type()
-        self.q_out = queue_type()
-        self.outbuf = outbuf
-        self.errbuf = errbuf
-        self.done = [False] * max_buffered
-        self.todo = array.array('l', [-1] * max_buffered)
-        self.cursor = 0  # the next slot we want to *read*
+        self.worker_type = start_worker
+        self.q_in = q_in  # job feed queue
+        self.q_out = q_out  # job termination info queue
+        self.outbuf = outbuf  # storage for results produced by workers
+        self.errbuf = errbuf  # storage for errors from the workers
+        self.done = [False] * max_buffered  # what's ready to be returned
+        self.todo = array.array('l', [-1] * max_buffered)  # buffer<->key map
+        self.cursor = 0  # the next buffer slot we want to *read*
         self.step_item = step_item
         self.idle_timeout = idle_timout
 
-        # enqueue jobs
+        # enqueue initial jobs
         self.todo[0] = init
         self.q_in.put_nowait((init, 0))
         for i in range(1, max_buffered):
@@ -165,7 +165,7 @@ class Prefetcher(Sequence):
 
         # start workers
         for pid in range(nworkers):
-            w = worker_type(
+            w = start_worker(
                 target=_worker,
                 args=(pid, sequence, self.outbuf, self.errbuf,
                       self.q_in, self.q_out, self.idle_timeout))
@@ -197,7 +197,7 @@ class Prefetcher(Sequence):
 
         else:  # handle evaluation error
             si = -si - 2
-            et, ev, tb = self.errbuf[bi]
+            _, ev, tb = self.errbuf[bi]
 
             if ev is not None:
                 try:
@@ -213,7 +213,7 @@ class Prefetcher(Sequence):
 
     @basic_getitem
     def __getitem__(self, key):
-        if key != self.todo[self.cursor]:
+        if key != self.todo[self.cursor]:  # unexpected request
             # cancel as many jobs as possible
             renewable = [i for i, done in enumerate(self.done) if done]
             try:
@@ -222,7 +222,7 @@ class Prefetcher(Sequence):
             except queue.Empty:
                 pass
 
-            # reassign target
+            # reassign targets
             self.cursor = 0
             self.done = [False] * self.max_buffered
             self.todo[0] = key
@@ -234,14 +234,14 @@ class Prefetcher(Sequence):
                 self.q_in.put_nowait((self.todo[bi], bi))
 
         # reassign previously returned slot if any
-        last_slot = (self.cursor - 1) % self.max_buffered
-        if self.done[last_slot]:
-            last_enqueued = self.todo[(self.cursor - 2) % self.max_buffered]
-            self.todo[last_slot] = self.step_item(last_enqueued)
-            self.done[last_slot] = False
-            self.q_in.put_nowait((self.todo[last_slot], last_slot))
+        previous_slot = (self.cursor - 1) % self.max_buffered
+        if self.done[previous_slot]:
+            last_queued_key = self.todo[(self.cursor - 2) % self.max_buffered]
+            self.todo[previous_slot] = self.step_item(last_queued_key)
+            self.done[previous_slot] = False
+            self.q_in.put_nowait((self.todo[previous_slot], previous_slot))
 
-        # fetch results until we have requested one
+        # fetch results until we have the requested one
         while not self.done[self.cursor]:
             self._readone()
 
@@ -259,10 +259,10 @@ class Prefetcher(Sequence):
             self.todo[last_slot] = last_enqueued
             self.done[last_slot] = False
             self.q_in.put_nowait((last_enqueued, last_slot))
-            self.cursor = (i + 1) % self.max_buffered
+            self.cursor = (i + 1) % self.max_buffered  # preserve self state
             actual_cursor = i % self.max_buffered
 
-            # fetch results until we have requested one
+            # fetch results until we have the requested one
             while not self.done[actual_cursor]:
                 self._readone()
 
@@ -270,10 +270,17 @@ class Prefetcher(Sequence):
 
     @staticmethod
     def _finalize(workers, q_in, q_out):
-        while not q_in.empty():
-            q_in.get(timeout=0.05)
-        while not q_out.empty():
-            q_out.get(timeout=0.05)
+        try:
+            while True:
+                q_in.get(timeout=0.05)
+        except queue.Empty:
+            pass
+        try:
+            while True:
+                q_out.get(timeout=0.05)
+        except queue.Empty:
+            pass
+
         for _ in range(len(workers)):  # inject sentinel values
             q_in.put((-1, -1))
         for w in workers:  # wait for termination
@@ -282,7 +289,7 @@ class Prefetcher(Sequence):
 
 def prefetch(sequence, nworkers=None, max_buffered=None,
              method='thread', direction=None, idle_timout=2):
-    """Returns view over the sequence backed by multiple workers in order to
+    """Returns a view over the sequence backed by multiple workers in order to
     fetch values ahead.
 
     :param sequence:
@@ -298,7 +305,7 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
 
         - `'thread'` uses `threading.Thread` which is prefereable when many
           operations realeasing the GIL such as IO operations are involved.
-          However only one thread is active at any given time
+          However only one thread is active at any given time.
         - `'proc'` uses `multiprocessing.Process` which provides full
           parallelism but induces extra cpu and memory operations because the
           results must be serialized and copied from the workers back to main
@@ -314,6 +321,20 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
         Exceptions raised in the workers while reading the sequence values will
         trigger an :class:`EagerAccessException`. When possible, information on
         the cause of failure will be provided in the exception message.
+
+    .. note::
+        For specific use-cases, the argument `method` can take a tuple with:
+          - two queues accessible by the workers and the main thread with a
+            capacity for at list `max_buffered` pairs of ints.
+          - a function that takes a `target` callable and `args` a tuple of
+            arguments for that target and returns a Thread-like object (ex:
+            `threading.Thread` or `multiprocessing.Process`).
+          - a sequence of length `max_buffered` which must be assignable
+            by the workers and indexable by the main thread to exchange the
+            values from `sequence`, for example a
+            `multiprocessing.sharedctypes.RawArray`
+          - a similar sequence of size `nworkers` which must accept any
+            picklable objects.
     """
     return Prefetcher(sequence, nworkers, max_buffered, method,
                       direction, idle_timout)

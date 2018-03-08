@@ -11,6 +11,10 @@ def isint(x):
     return isinstance(x, numbers.Integral)
 
 
+def clip(x, a, b):
+    return max(a, min(x, b))
+
+
 def basic_getitem(f):
     """decorator for a sane defaults implementation of __getitem__ that calls
     the actual implementation on integer keys in range 0 to len(self).
@@ -128,7 +132,11 @@ class SeqSlice(Sequence):
 
 
 class SharedCtypeQueue:
-    """Simplified queue for struct type entities."""
+    """Simplified multiprocessing queue for `struct` entities.
+
+    .. warning::
+        only safe for one reader thread.
+    """
     def __init__(self, fmt, max_size):
         self.fmt = fmt
         self.itemsize = struct.calcsize(fmt)
@@ -148,16 +156,16 @@ class SharedCtypeQueue:
             raise queue.Empty()
 
         # acquire one readable slot
-        self.startlock.acquire()  # ignored timeout should go unnoticed
+        self.startlock.acquire()  # no timeout but should go unnoticed
         offset = (self.start.value % self.max_size) * self.itemsize
         self.start.value += 1
-        self.startlock.release()  # safe until putsem is released
 
         # copy value
         buf = self.values[offset:offset + self.itemsize]
         v = struct.unpack(self.fmt, buf)
 
         # release buffer slot for writing
+        self.startlock.release()
         self.putsem.release()
 
         return v
@@ -165,14 +173,13 @@ class SharedCtypeQueue:
     def get_nowait(self):
         return self.get(blocking=False)
 
-
     def put(self, value, blocking=True, timeout=None):
         # wait for an empty slot
         if not self.putsem.acquire(blocking, timeout):
             raise queue.Full()
 
         # take specific slot
-        self.stoplock.acquire()  # ignored timeout should go unnoticed
+        self.stoplock.acquire()  # no timeout but should go unnoticed
         offset = (self.stop.value % self.max_size) * self.itemsize
 
         try:  # transfer values and update state
