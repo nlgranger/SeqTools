@@ -1,0 +1,17 @@
+# Changelog
+All notable changes to this project will be documented in this file.
+
+## [0.8] - 2018-05-05
+### Added
+- added CHANGELOG
+- added simple debugging functions in `seqtools.instrument`
+- added new sequence manipulation functions: interleaving, unbatching,
+  prefetching
+
+### Deprecated
+- `eager_iter` is superseeded by `prefetch`
+- `reindex` renamed to `gather` or its alias `take` to match ther libraries.
+
+### Fixed
+- Fixed edge cases with multithreaded evaluation.
+- Miscellaneous small errors
