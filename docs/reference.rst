@@ -16,6 +16,7 @@ API Reference
     concatenate
     cycle
     gather
+    take
     interleave
     prefetch
     repeat
@@ -36,6 +37,7 @@ Indexing and reshaping
 ----------------------
 
 .. autofunction:: gather
+.. autofunction:: take
 .. autofunction:: concatenate
 .. autofunction:: collate
 .. autofunction:: interleave

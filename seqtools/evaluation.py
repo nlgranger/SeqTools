@@ -11,6 +11,7 @@ import threading
 from collections import OrderedDict
 import traceback
 import queue
+import logging
 try:
     import tblib
 except ImportError:
@@ -338,3 +339,11 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
     """
     return Prefetcher(sequence, nworkers, max_buffered, method,
                       direction, idle_timout)
+
+
+def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
+    logging.warning(
+        "Call to deprecated function eager_iter, use prefetch instead",
+        category=DeprecationWarning,
+        stacklevel=2)
+    return iter(prefetch(sequence, nworkers, max_buffered, method))

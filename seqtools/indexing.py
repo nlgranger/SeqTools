@@ -2,6 +2,7 @@ from typing import Sequence, Iterable
 import itertools
 import bisect
 from array import array
+import logging
 from .utils import isint, basic_getitem, basic_setitem
 
 
@@ -65,6 +66,19 @@ class Reindexing(Sequence):
 
 def gather(sequence, indexes):
     """Returns a view on the sequence reordered by indexes."""
+    return Reindexing(sequence, indexes)
+
+
+def take(sequence, indexes):
+    """Alias for :func:`seqtools.gather`."""
+    return Reindexing(sequence, indexes)
+
+
+def reindex(sequence, indexes):
+    logging.warning(
+        "Call to deprecated function reindex, use gather instead",
+        category=DeprecationWarning,
+        stacklevel=2)
     return Reindexing(sequence, indexes)
 
 
