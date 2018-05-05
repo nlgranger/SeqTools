@@ -1,8 +1,8 @@
 from typing import Sequence
 import array
-import itertools
 import bisect
 from logging import warning
+import itertools
 try:
     from itertools import izip as zip  # pylint: disable=redefined-builtin
 except ImportError:
@@ -74,6 +74,9 @@ class Concatenation(Sequence):
     def __setitem__(self, key, value):
         s = bisect.bisect(self.offsets, key) - 1
         self.sequences[s][key - self.offsets[s]] = value
+
+    def __iter__(self):
+        return itertools.chain(*self.sequences)
 
 
 def concatenate(sequences):
@@ -168,7 +171,9 @@ class Unbatching:
         return self.sequence[b][i]
 
     def __iter__(self):
-        return itertools.islice(self.sequence, len(self))
+        for b in self.sequence:
+            for v in b:
+                yield v
 
 
 def unbatch(sequence, batch_size, last_batch_size=None):
@@ -241,11 +246,12 @@ def split(sequence, edges):
     :param sequence:
         Input sequence.
     :param edges:
-        `edges` can be of two types:
-          - a 1D array that contains the indexes where the sequence
-            should be cut, the beginning and the end of the sequence are
-            implicit.
-          - an int specifies how many cuts of equal size should be done, in
-            which case `edges + 1` must divide the length of the sequence.
+        `edges` specifies how to split the sequence:
+
+        - a 1D array that contains the indexes where the sequence should be
+          cut, the beginning and the end of the sequence are implicit.
+        - an int specifies how many cuts of equal size should be done, in which
+          case `edges + 1` must divide the length of the sequence.
+        - an sequence of int tuples specifies the limits of subsequences.
     """
     return Split(sequence, edges)

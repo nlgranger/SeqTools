@@ -2,7 +2,7 @@
 
    from seqtools import *
 
-.. currentmodule:: seqtools
+.. py:module:: seqtools
 
 
 API Reference
@@ -57,3 +57,9 @@ Errors
 ------
 
 .. autoclass:: EagerAccessException
+
+Tools
+-----
+
+.. autofunction:: seqtools.instrument.debug
+.. autofunction:: seqtools.instrument.monitor_throughput

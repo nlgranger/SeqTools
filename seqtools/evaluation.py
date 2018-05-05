@@ -324,17 +324,17 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
 
     .. note::
         For specific use-cases, the argument `method` can take a tuple with:
-          - two queues accessible by the workers and the main thread with a
-            capacity for at list `max_buffered` pairs of ints.
-          - a function that takes a `target` callable and `args` a tuple of
-            arguments for that target and returns a Thread-like object (ex:
-            `threading.Thread` or `multiprocessing.Process`).
-          - a sequence of length `max_buffered` which must be assignable
-            by the workers and indexable by the main thread to exchange the
-            values from `sequence`, for example a
-            `multiprocessing.sharedctypes.RawArray`
-          - a similar sequence of size `nworkers` which must accept any
-            picklable objects.
+
+        - two queues accessible by the workers and the main thread with a
+          capacity for at list `max_buffered` pairs of ints.
+        - a function that takes a `target` callable and `args` a tuple of
+          arguments for that target and returns a Thread-like object (ex:
+          `threading.Thread` or `multiprocessing.Process`).
+        - a sequence of length `max_buffered` which must be assignable by the
+          workers and indexable by the main thread to exchange the values from
+          `sequence`, for example a `multiprocessing.sharedctypes.RawArray`
+        - a similar sequence of size `nworkers` which must accept any picklable
+          objects.
     """
     return Prefetcher(sequence, nworkers, max_buffered, method,
                       direction, idle_timout)
