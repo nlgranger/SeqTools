@@ -43,7 +43,7 @@ def make_batches(data, f, buffers, batch_size, drop_last=False, nworkers=0):
 
     minibatches = seqtools.smap(batch_copy, data_batches, ring_buffers)
 
-    return seqtools.prefetch(minibatches, nworkers, max_buffered=len(buffers))
+    return seqtools.prefetch(minibatches, nworkers, max_cached=len(buffers))
 
 
 raw_data = list(range(100))

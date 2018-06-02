@@ -4,7 +4,7 @@ import numbers
 from typing import Sequence
 import multiprocessing
 import queue
-from multiprocessing.sharedctypes import RawArray, RawValue, Value
+from multiprocessing.sharedctypes import RawArray, RawValue
 
 
 def isint(x):

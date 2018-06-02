@@ -44,48 +44,52 @@ def test_cached():
 @pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch(method):
     def f1(x):
-        sleep(random.random() / 500)
+        sleep(0.005 * (1 + random.random()))
         return x
 
     arr = list(range(300))
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=3, max_buffered=20, method=method)
+    y = prefetch(y, nworkers=4, max_cached=10, method=method, timeout=1)
+    arr = arr[3:-1:2]
+    y = y[3:-1:2]
 
     i = 0
-    for _ in range(1000):
+    n_wakeups = 3
+    for _ in range(500):
+        if n_wakeups > 0 and random.random() < 0.005:
+            sleep(1.1)  # will let worker go to sleep
+            n_wakeups -= 1
         assert y[i] == arr[i]
         if random.random() < 0.05:
             i = random.randrange(0, len(arr))
         else:
             i = (i + 1) % len(arr)
-        if random.random() < 0.01:
-            sleep(.1)
 
 
 @pytest.mark.timeout(15)
 @pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch_timing(method):
     def f1(x):
-        sleep(.05)
+        sleep(.02)
         return x
 
-    arr = list(range(121))
+    arr = list(range(100))
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=3, max_buffered=20, method=method)
+    y = prefetch(y, nworkers=2, max_cached=20, method=method, timeout=1)
 
     t1 = time()
     z = list(y)
     t2 = time()
 
     assert z == arr
-    assert t2 - t1 < 2.05 * 1.3  # hopefully better in practice...
+    assert t2 - t1 < 1.1  # hopefully better in practice...
 
     t1 = time()
     z = [y[i] for i in range(len(y))]
     t2 = time()
 
     assert z == arr
-    assert t2 - t1 < 2.05 * 1.3
+    assert t2 - t1 < 1.1
 
 
 @pytest.mark.timeout(10)
@@ -102,7 +106,7 @@ def test_prefetch_errors(method):
 
     arr1 = [1, 2, 3, None]
     arr2 = smap(f1, arr1)
-    y = prefetch(arr2, nworkers=2, max_buffered=2, method=method)
+    y = prefetch(arr2, nworkers=2, max_cached=2, method=method)
 
     for i in range(3):
         assert y[i] == arr1[i]
@@ -117,7 +121,7 @@ def test_prefetch_errors(method):
             return x
 
     arr2 = smap(f2, arr1)
-    y = prefetch(arr2, nworkers=2, max_buffered=2, method=method)
+    y = prefetch(arr2, nworkers=2, max_cached=2, method=method)
 
     for i in range(3):
         assert y[i] == arr1[i]
@@ -129,3 +133,6 @@ def test_prefetch_errors(method):
         assert isinstance(e.__cause__, ValueError)
     else:
         assert False
+
+    assert y[0] == 1
+    assert y[1] == 2
