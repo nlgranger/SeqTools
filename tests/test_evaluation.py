@@ -1,8 +1,14 @@
 import pytest
 import random
+import logging
 from time import sleep, time
 
-from seqtools import add_cache, smap, prefetch, EagerAccessException
+from seqtools import add_cache, smap, prefetch, PrefetchException
+
+logging.basicConfig(level=logging.INFO)
+seed = int(random.random() * 100000)
+logging.info("seed: {}".format(seed))
+random.seed(seed)
 
 
 def test_cached():
@@ -35,7 +41,7 @@ def test_cached():
 
 
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "proc"])
+@pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch(method):
     def f1(x):
         sleep(random.random() / 500)
@@ -43,19 +49,21 @@ def test_prefetch(method):
 
     arr = list(range(300))
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=3, max_buffered=20, method=method, idle_timout=.1)
+    y = prefetch(y, nworkers=3, max_buffered=20, method=method)
 
     i = 0
     for _ in range(1000):
         assert y[i] == arr[i]
         if random.random() < 0.05:
-            i = random.randrange(0, len(y))
+            i = random.randrange(0, len(arr))
+        else:
+            i = (i + 1) % len(arr)
         if random.random() < 0.01:
-            sleep(.2)
+            sleep(.1)
 
 
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "proc"])
+@pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch_timing(method):
     def f1(x):
         sleep(.05)
@@ -70,7 +78,6 @@ def test_prefetch_timing(method):
     t2 = time()
 
     assert z == arr
-    print(t2 - t1)
     assert t2 - t1 < 2.05 * 1.3  # hopefully better in practice...
 
     t1 = time()
@@ -78,12 +85,11 @@ def test_prefetch_timing(method):
     t2 = time()
 
     assert z == arr
-    print(t2 - t1)
     assert t2 - t1 < 2.05 * 1.3
 
 
 @pytest.mark.timeout(10)
-@pytest.mark.parametrize("method", ["thread", "proc"])
+@pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch_errors(method):
     class CustomError(Exception):
         pass
@@ -100,8 +106,9 @@ def test_prefetch_errors(method):
 
     for i in range(3):
         assert y[i] == arr1[i]
-    with pytest.raises(EagerAccessException):
-        print(y[3])
+    with pytest.raises(PrefetchException):
+        a = y[3]
+        del a
 
     def f2(x):
         if x is None:
@@ -115,9 +122,10 @@ def test_prefetch_errors(method):
     for i in range(3):
         assert y[i] == arr1[i]
     try:
-        print(y[3])
+        a = y[3]
+        del a
     except Exception as e:
-        assert isinstance(e, EagerAccessException)
+        assert isinstance(e, PrefetchException)
         assert isinstance(e.__cause__, ValueError)
     else:
         assert False

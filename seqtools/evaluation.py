@@ -4,7 +4,6 @@ try:
 except ImportError:
     from backports.weakref import finalize
 import array
-from typing import Sequence
 import multiprocessing
 import multiprocessing.sharedctypes
 import threading
@@ -12,6 +11,10 @@ from collections import OrderedDict
 import traceback
 import queue
 import logging
+from enum import IntEnum
+from typing import Sequence
+from numbers import Integral
+
 try:
     import tblib
 except ImportError:
@@ -21,6 +24,8 @@ from future.utils import raise_from, raise_with_traceback
 
 from .utils import basic_getitem, basic_setitem, SharedCtypeQueue
 
+
+# ---------------------------------------------------------------------------------------
 
 class CachedSequence(Sequence):
     def __init__(self, sequence, cache_size=1, cache=None):
@@ -66,230 +71,356 @@ def add_cache(arr, cache_size=1, cache=None):
     return CachedSequence(arr, cache_size, cache)
 
 
-class EagerAccessException(RuntimeError):
+# ---------------------------------------------------------------------------------------
+
+class PrefetchException(RuntimeError):
     pass
 
 
-def _worker(pid, sequence, outbuf, errbuf, q_in, q_out, idle_timout):
-    si = 0
-
-    # noinspection PyBroadException
-    try:
-        while True:
-            try:
-                si, bi = q_in.get(timeout=idle_timout)
-
-            except queue.Empty:  # go to sleep
-                q_out.put((-1, pid))
-                return
-
-            if si < 0:  # stop on sentinel value
-                return
-
-            outbuf[bi] = sequence[si]
-            q_out.put((si, bi))
-
-    except Exception:
-        try:
-            et, ev, tb = sys.exc_info()
-            tb = tblib.Traceback(tb)
-
-            # minimal traceback information
-            errbuf[pid] = (None, None, traceback.format_exc(20))
-            # this one may fail if ev is not picklable
-            errbuf[pid] = (et, ev, tb)
-
-        finally:
-            q_out.put((-si - 2, pid))
-
-    finally:  # silence logging since we handle errors ourselves
-        return
+class JobStatus(IntEnum):
+    QUEUED = 1,
+    DONE = 2,
+    FAILED = 3,
 
 
-class Prefetcher(Sequence):
-    def __init__(self, sequence, nworkers=None, max_buffered=None,
-                 method='thread', direction=None, idle_timout=2):
+class ThreadedSequence(Sequence):
+    def __init__(self, sequence, buffer_size, nworkers=0, timeout=1):
+        if buffer_size < 1:
+            raise ValueError("buffer size must be stricly positive")
+
         if nworkers <= 0:
             nworkers = multiprocessing.cpu_count() - nworkers
 
-        max_buffered = len(sequence) if max_buffered is None else max_buffered
-        if max_buffered < 1:
-            raise ValueError("max_buffered must be at least 1")
-
-        nworkers = min(nworkers, max_buffered)
-
-        if method == 'thread':
-            q_in = queue.Queue(maxsize=max_buffered)
-            q_out = queue.Queue(maxsize=max_buffered)
-            start_worker = threading.Thread
-            outbuf = [None] * max_buffered
-            errbuf = [None] * nworkers
-
-        elif method == 'proc':
-            q_in = SharedCtypeQueue(fmt="2i", max_size=max_buffered)
-            q_out = SharedCtypeQueue(fmt="2i", max_size=max_buffered)
-            start_worker = multiprocessing.Process
-            manager = multiprocessing.Manager()
-            outbuf = manager.list([None] * max_buffered)
-            errbuf = manager.list([None] * nworkers)
-
-        else:
-            q_in, q_out, start_worker, outbuf, errbuf = method
-            if len(outbuf) < max_buffered:
-                raise ValueError("buffer is too small")
-
-        if direction is None:
-            init, step_item = 0, lambda j: (j + 1) % len(sequence)
-        else:
-            init, step_item = direction
+        self.nworkers = min(nworkers, buffer_size)
 
         self.sequence = sequence
+        self.buffer = [None] * buffer_size
+        self.errors = [None] * buffer_size
+        self.q_in = queue.Queue(maxsize=buffer_size)
+        self.q_out = queue.Queue(maxsize=buffer_size)
+        self.manager = OOODataManager(len(sequence), buffer_size,
+                                      self.add_job, self.wait, self.reraise)
         self.workers = []
-        self.max_buffered = max_buffered
-        self.worker_type = start_worker
-        self.q_in = q_in  # job feed queue
-        self.q_out = q_out  # job termination info queue
-        self.outbuf = outbuf  # storage for results produced by workers
-        self.errbuf = errbuf  # storage for errors from the workers
-        self.done = [False] * max_buffered  # what's ready to be returned
-        self.todo = array.array('l', [-1] * max_buffered)  # buffer<->key map
-        self.cursor = 0  # the next buffer slot we want to *read*
-        self.step_item = step_item
-        self.idle_timeout = idle_timout
-
-        # enqueue initial jobs
-        self.todo[0] = init
-        self.q_in.put_nowait((init, 0))
-        for i in range(1, max_buffered):
-            self.todo[i] = self.step_item(self.todo[i - 1])
-            self.q_in.put_nowait((self.todo[i], i))
+        self.timeout = timeout
 
         # start workers
-        for pid in range(nworkers):
-            w = start_worker(
-                target=_worker,
-                args=(pid, sequence, self.outbuf, self.errbuf,
-                      self.q_in, self.q_out, self.idle_timeout))
+        for _ in range(nworkers):
+            w = threading.Thread(
+                target=self.__class__.target,
+                args=(self.sequence, self.buffer, self.errors,
+                      self.q_in, self.q_out, self.timeout))
             w.start()
             self.workers.append(w)
 
         # ensure proper termination in any situation
-        finalize(self, Prefetcher._finalize,
-                 self.workers, self.q_in, self.q_out)
+        finalize(self, ThreadedSequence.finalize, self.q_in, nworkers)
 
     def __len__(self):
         return len(self.sequence)
 
-    def _readone(self):
-        si, bi = self.q_out.get()
-
-        if si >= 0:
-            if self.todo[bi] != si:  # not the desired item anymore
-                self.q_in.put_nowait((self.todo[bi], bi))  # enqueue right one
-            else:
-                self.done[bi] = True
-
-        elif si == -1:  # worker timed out, restart it
-            self.workers[bi] = self.worker_type(
-                target=_worker,
-                args=(bi, self.sequence, self.outbuf, self.errbuf,
-                      self.q_in, self.q_out, self.idle_timeout))
-            self.workers[bi].start()
-
-        else:  # handle evaluation error
-            si = -si - 2
-            _, ev, tb = self.errbuf[bi]
-
-            if ev is not None:
-                try:
-                    raise_with_traceback(ev, tb.as_traceback())
-                except Exception as e_reason:
-                    e = EagerAccessException(
-                        "failed to get item {}".format(si))
-                    raise_from(e, e_reason)
-
-            else:
-                raise EagerAccessException(
-                    "failed to get item {}".format(si))
-
-    @basic_getitem
     def __getitem__(self, key):
-        if key != self.todo[self.cursor]:  # unexpected request
-            # cancel as many jobs as possible
-            renewable = [i for i, done in enumerate(self.done) if done]
+        if isinstance(key, slice):
+            return self.__class__(
+                self.sequence[key], len(self.buffer), len(self.nworkers))
+
+        if not isinstance(key, Integral):
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+        if key < -len(self) or key >= len(self):
+            raise IndexError(
+                self.__class__.__name__ + " index out of range")
+
+        if key < 0:
+            key = len(self) + key
+
+        return self.buffer[self.manager.prepare(key)]
+
+    def add_job(self, item, slot):
+        self.q_in.put_nowait((item, slot))
+
+    def wait(self):
+        while True:
             try:
-                while True:
-                    renewable.append(self.q_in.get_nowait()[1])
+                return self.q_out.get(timeout=self.timeout)
+
+            except queue.Empty:
+                for i, w in enumerate(self.workers):
+                    if not w.is_alive():
+                        w = threading.Thread(
+                            target=self.__class__.target,
+                            args=(self.sequence, self.buffer, self.errors,
+                                  self.q_in, self.q_out, self.timeout))
+                        w.start()
+                        self.workers[i] = w
+
+    def reraise(self, slot):
+        et, ev, tb = self.errors[slot]
+        if ev is not None:
+            raise_with_traceback(ev, tb.as_traceback())
+        else:
+            raise RuntimeError(tb)
+
+    @staticmethod
+    def target(sequence, buffer, errors, q_in, q_out, timeout):
+        while True:
+            try:
+                item, slot = q_in.get(timeout=timeout)
+            except queue.Empty:
+                return
+            if slot < 0:
+                return
+
+            # noinspection PyBroadException
+            try:
+                buffer[slot] = sequence[item]
+
+            except Exception:
+                et, ev, tb = sys.exc_info()
+                tb = tblib.Traceback(tb)
+                errors[slot] = (et, ev, tb)
+                q_out.put((item, slot, JobStatus.FAILED))
+
+            else:
+                q_out.put((item, slot, JobStatus.DONE))
+
+    @staticmethod
+    def finalize(q_in, n_workers):
+        # drain input queue
+        while not q_in.empty():
+            try:
+                q_in.get_nowait()
             except queue.Empty:
                 pass
 
-            # reassign targets
-            self.cursor = 0
-            self.done = [False] * self.max_buffered
-            self.todo[0] = key
-            for i in range(1, self.max_buffered):
-                self.todo[i] = self.step_item(self.todo[i - 1])
+        # send termination signals
+        for _ in range(n_workers):
+            q_in.put((0, -1))
 
-            # enqueue new jobs
-            for bi in renewable:
-                self.q_in.put_nowait((self.todo[bi], bi))
 
-        # reassign previously returned slot if any
-        previous_slot = (self.cursor - 1) % self.max_buffered
-        if self.done[previous_slot]:
-            last_queued_key = self.todo[(self.cursor - 2) % self.max_buffered]
-            self.todo[previous_slot] = self.step_item(last_queued_key)
-            self.done[previous_slot] = False
-            self.q_in.put_nowait((self.todo[previous_slot], previous_slot))
+class MultiprocessSequence(Sequence):
+    def __init__(self, sequence, buffer_size, nworkers=0, timeout=1):
+        if buffer_size < 1:
+            raise ValueError("buffer size must be stricly positive")
 
-        # fetch results until we have the requested one
-        while not self.done[self.cursor]:
-            self._readone()
+        if nworkers <= 0:
+            nworkers = multiprocessing.cpu_count() - nworkers
 
-        output = self.outbuf[self.cursor]
-        self.cursor = (self.cursor + 1) % self.max_buffered
-        return output
+        nworkers = min(nworkers, buffer_size)
 
-    def __iter__(self):
-        yield self[0]
-        last_enqueued = self.todo[-1]
+        self.sequence = sequence
+        manager = multiprocessing.Manager()
+        self.buffer = manager.list([None] * buffer_size)
+        self.errors = manager.list([None, None, ""] * buffer_size)
+        self.q_in = SharedCtypeQueue("Ll", maxsize=buffer_size)
+        self.q_out = SharedCtypeQueue("LLb", maxsize=buffer_size)
+        self.manager = OOODataManager(len(sequence), buffer_size,
+                                      self.add_job, self.wait, self.reraise)
+        self.workers = []
+        self.timeout = timeout
 
-        for i in range(1, len(self)):
-            last_enqueued = self.step_item(last_enqueued)
-            last_slot = (i - 1) % self.max_buffered
-            self.todo[last_slot] = last_enqueued
-            self.done[last_slot] = False
-            self.q_in.put_nowait((last_enqueued, last_slot))
-            self.cursor = (i + 1) % self.max_buffered  # preserve self state
-            actual_cursor = i % self.max_buffered
+        # start workers
+        for i in range(nworkers):
+            w = multiprocessing.Process(
+                target=self.__class__.target,
+                args=(self.sequence, self.buffer, self.errors,
+                      self.q_in, self.q_out, self.timeout))
+            w.start()
+            self.workers.append(w)
 
-            # fetch results until we have the requested one
-            while not self.done[actual_cursor]:
-                self._readone()
+        # ensure proper termination in any situation
+        finalize(self, self.__class__.finalize, self.q_in, nworkers)
 
-            yield self.outbuf[actual_cursor]
+    def __len__(self):
+        return len(self.sequence)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.__class__(
+                self.sequence[key], len(self.buffer), len(self.workers), self.timeout)
+
+        if not isinstance(key, Integral):
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+        if key < -len(self) or key >= len(self):
+            raise IndexError(
+                self.__class__.__name__ + " index out of range")
+
+        if key < 0:
+            key = len(self) + key
+
+        return self.buffer[self.manager.prepare(key)]
+
+    def add_job(self, item, slot):
+        self.q_in.put_nowait((item, slot))
+
+    def wait(self):
+        while True:
+            try:
+                return self.q_out.get(timeout=self.timeout)
+
+            except queue.Empty:
+                for i, w in enumerate(self.workers):
+                    if not w.is_alive():
+                        w = multiprocessing.Process(
+                            target=self.__class__.target,
+                            args=(self.sequence, self.buffer, self.errors,
+                                  self.q_in, self.q_out, self.timeout))
+                        w.start()
+                        self.workers[i] = w
+
+    def reraise(self, slot):
+        et, ev, tb = self.errors[slot]
+        self.errors[slot] = (None, None, "")
+        if ev is not None:
+            raise_with_traceback(ev, tb.as_traceback())
+        else:
+            raise RuntimeError(tb)
 
     @staticmethod
-    def _finalize(workers, q_in, q_out):
+    def target(sequence, buffer, errors, q_in, q_out, timeout):
         try:
             while True:
-                q_in.get(timeout=0.05)
-        except queue.Empty:
-            pass
-        try:
-            while True:
-                q_out.get(timeout=0.05)
-        except queue.Empty:
-            pass
+                try:
+                    item, slot = q_in.get(timeout=timeout)
+                except queue.Empty:
+                    return
+                if slot < 0:
+                    return
 
-        for _ in range(len(workers)):  # inject sentinel values
-            q_in.put((-1, -1))
-        for w in workers:  # wait for termination
-            w.join()
+                # noinspection PyBroadException
+                try:
+                    buffer[slot] = sequence[item]
+
+                except Exception:
+                    et, ev, tb = sys.exc_info()
+                    tb = tblib.Traceback(tb)
+                    tb_str = traceback.format_exc(20)
+                    # noinspection PyBroadException
+                    try:  # this one may fail if ev is not picklable
+                        errors[slot] = et, ev, tb
+                    except Exception:
+                        errors[slot] = None, None, tb_str
+
+                    q_out.put_nowait((item, slot, JobStatus.FAILED))
+
+                else:
+                    q_out.put_nowait((item, slot, JobStatus.DONE))
+
+        except IOError:
+            return  # parent probably died
+
+    @staticmethod
+    def finalize(q_in, n_workers):
+        # drain input queue
+        while not q_in.empty():
+            try:
+                q_in.get_nowait()
+            except queue.Empty:
+                pass
+
+        # send termination signals
+        for _ in range(n_workers):
+            q_in.put((0, -1))
 
 
-def prefetch(sequence, nworkers=None, max_buffered=None,
-             method='thread', direction=None, idle_timout=2):
+class OOODataManager:
+    """A manager for data stores accessible via job submission and asynchronous reads,
+    assumes a local buffer is available to save some values in cache.
+    It will schedule up to `buffer_size` jobs to try to anticipate future requests.
+
+    :param size:
+        size of the dataset
+    :param buffer_size:
+        limit over the number of locally stored values
+    :param add_job:
+        a function that triggers the computation of an item, takes the item index
+        and the buffer slot where the result should be go.
+    :param wait:
+        a function that blocks execution until any job is completed, must return the
+        index if the computed item, the buffer slot and the completion status: either
+        `JobStatus.DONE` or `JobStatus.FAILED`.
+    :param reraise:
+        (optional) a function that reraises the error from a failed job, should take
+        the buffer slot of that job as argument.
+    """
+    def __init__(self, size, buffer_size, add_job, wait, reraise=None):
+        if buffer_size < 1:
+            raise ValueError("max_buffered must be at least 1")
+
+        self.size = size
+        self.max_queued = buffer_size
+        self.add_job = add_job
+        self.wait = wait
+        self.reraise = reraise
+
+        # enqueue initial jobs
+        for i in range(0, self.max_queued):
+            add_job(i % size, i % size)
+
+        # items computed or enqueued or soon to be enqueued
+        self.todo = array.array('l', list(range(buffer_size)))
+        # next item to queue
+        self.todo_next = 0
+        # computed values
+        self.status = array.array('b', [JobStatus.QUEUED] * buffer_size)
+        # slot containing the expected next read
+        self.next_read_slot = 0
+
+        self.todo_next = buffer_size % size
+
+    def prepare(self, item):
+        """Computes specified item and returns its buffer slot."""
+
+        # reassign previously returned slot if any
+        if self.status[self.next_read_slot] == JobStatus.DONE:
+            self.status[self.next_read_slot] = JobStatus.QUEUED
+            self.todo[self.next_read_slot] = self.todo_next
+            self.add_job(self.todo_next, self.next_read_slot)
+
+            self.todo_next = (self.todo_next + 1) % self.size
+            self.next_read_slot = (self.next_read_slot + 1) % self.max_queued
+
+        if item != self.todo[self.next_read_slot]:  # unexpected request
+            # reassign targets
+            for i in range(self.max_queued):
+                self.todo[i] = (item + i) % self.size
+                if self.status[i] == JobStatus.DONE:
+                    self.add_job(self.todo[i], i)
+                self.status[i] = JobStatus.QUEUED
+
+            self.todo_next = (item + self.max_queued) % self.size
+            self.next_read_slot = 0
+
+        # fetch results until we have the requested one
+        while not self.status[self.next_read_slot] != JobStatus.QUEUED:
+            idx, slot, status = self.wait()
+            if idx != self.todo[slot]:  # slot reassigned
+                self.add_job(self.todo[slot], slot)
+            else:
+                self.status[slot] = status
+
+        # handle errors
+        if self.status[self.next_read_slot] == JobStatus.FAILED:
+                e = PrefetchException(
+                    "failed to get item {}".format(self.todo[self.next_read_slot]))
+                if self.reraise is not None:
+                    try:
+                        self.reraise(self.next_read_slot)
+                    except Exception as e_reason:
+                        raise_from(e, e_reason)
+
+                raise e
+
+        # return buffer slot
+        else:
+            return self.next_read_slot
+
+
+def prefetch(sequence, nworkers=None, max_buffered=None, method='thread', timeout=1):
     """Returns a view over the sequence backed by multiple workers in order to
     fetch values ahead.
 
@@ -307,38 +438,25 @@ def prefetch(sequence, nworkers=None, max_buffered=None,
         - `'thread'` uses `threading.Thread` which is prefereable when many
           operations realeasing the GIL such as IO operations are involved.
           However only one thread is active at any given time.
-        - `'proc'` uses `multiprocessing.Process` which provides full
+        - `'process'` uses `multiprocessing.Process` which provides full
           parallelism but induces extra cpu and memory operations because the
           results must be serialized and copied from the workers back to main
           thread.
-    :param direction:
-        a tuple with an initial value and a function taking the current index
-        and returning the next item to prefetch. Defaults to monotonic
-        progress with step 1 starting from 0.
-    :param idle_timout:
-        number of seconds to wait before putting idle workers to sleep.
+    :param timeout:
+        minimum duration after which workers may go to sleep, may incur slowdown on the
+        next requests.
 
     .. note::
         Exceptions raised in the workers while reading the sequence values will
         trigger an :class:`EagerAccessException`. When possible, information on
         the cause of failure will be provided in the exception message.
-
-    .. note::
-        For specific use-cases, the argument `method` can take a tuple with:
-
-        - two queues accessible by the workers and the main thread with a
-          capacity for at list `max_buffered` pairs of ints.
-        - a function that takes a `target` callable and `args` a tuple of
-          arguments for that target and returns a Thread-like object (ex:
-          `threading.Thread` or `multiprocessing.Process`).
-        - a sequence of length `max_buffered` which must be assignable by the
-          workers and indexable by the main thread to exchange the values from
-          `sequence`, for example a `multiprocessing.sharedctypes.RawArray`
-        - a similar sequence of size `nworkers` which must accept any picklable
-          objects.
     """
-    return Prefetcher(sequence, nworkers, max_buffered, method,
-                      direction, idle_timout)
+    if method == "thread":
+        return ThreadedSequence(sequence, max_buffered, nworkers, timeout)
+    elif method == "process" or method == "proc":
+        return MultiprocessSequence(sequence, max_buffered, nworkers, timeout)
+    else:
+        raise ValueError("unsupported method")
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):

@@ -4,7 +4,7 @@ import numbers
 from typing import Sequence
 import multiprocessing
 import queue
-from multiprocessing.sharedctypes import RawArray, RawValue
+from multiprocessing.sharedctypes import RawArray, RawValue, Value
 
 
 def isint(x):
@@ -132,41 +132,38 @@ class SeqSlice(Sequence):
 
 
 class SharedCtypeQueue:
-    """Simplified multiprocessing queue for `struct` entities.
-
-    .. warning::
-        only safe for one reader thread.
-    """
-    def __init__(self, fmt, max_size):
+    """Simplified multiprocessing queue for `struct` entities."""
+    def __init__(self, fmt, maxsize):
         self.fmt = fmt
         self.itemsize = struct.calcsize(fmt)
-        self.max_size = max_size
-        self.startlock = multiprocessing.Lock()
-        self.stoplock = multiprocessing.Lock()
-        self.getsem = multiprocessing.Semaphore(0)
-        self.putsem = multiprocessing.Semaphore(max_size)
-
-        self.values = memoryview(RawArray("b", max_size * self.itemsize))
+        self.maxsize = maxsize
+        self.values = memoryview(RawArray("b", maxsize * self.itemsize))
         self.start = RawValue(ctypes.c_longlong, 0)
+        self.startlock = multiprocessing.Lock()
+        self.getsem = multiprocessing.Semaphore(0)
         self.stop = RawValue(ctypes.c_longlong, 0)
+        self.stoplock = multiprocessing.Lock()
+        self.putsem = multiprocessing.Semaphore(maxsize)
 
     def get(self, blocking=True, timeout=None):
         # wait for something to read
         if not self.getsem.acquire(blocking, timeout):
             raise queue.Empty()
 
-        # acquire one readable slot
-        self.startlock.acquire()  # no timeout but should go unnoticed
-        offset = (self.start.value % self.max_size) * self.itemsize
-        self.start.value += 1
+        with self.startlock:  # no timeout but should go unnoticed
+            offset = (self.start.value % self.maxsize) * self.itemsize
+            self.start.value += 1
 
-        # copy value
-        buf = self.values[offset:offset + self.itemsize]
-        v = struct.unpack(self.fmt, buf)
+            # copy value
+            buf = self.values[offset:offset + self.itemsize]
 
-        # release buffer slot for writing
-        self.startlock.release()
-        self.putsem.release()
+            try:
+                v = struct.unpack(self.fmt, buf)
+            except Exception:
+                raise
+            finally:
+                # release buffer slot for writing
+                self.putsem.release()
 
         return v
 
@@ -179,16 +176,16 @@ class SharedCtypeQueue:
             raise queue.Full()
 
         # take specific slot
-        self.stoplock.acquire()  # no timeout but should go unnoticed
-        offset = (self.stop.value % self.max_size) * self.itemsize
+        with self.stoplock:  # no timeout but should go unnoticed
+            offset = (self.stop.value % self.maxsize) * self.itemsize
 
-        try:  # transfer values and update state
-            struct.pack_into(self.fmt, self.values, offset, *value)
-            self.stop.value += 1
-
-        finally:  # release access and notify readers
-            self.stoplock.release()
-            self.getsem.release()
+            try:  # transfer values and update state
+                struct.pack_into(self.fmt, self.values, offset, *value)
+            except Exception:
+                raise
+            else:
+                self.stop.value += 1
+                self.getsem.release()
 
     def put_nowait(self, value):
         self.put(value, blocking=False)

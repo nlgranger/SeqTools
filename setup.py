@@ -31,13 +31,14 @@ setup(
         'typing;python_version<"3.6"',
         'backports.weakref;python_version<"3"',
         'monotonic;python_version<"3"',
+        'enum34;python_version<"3"',
         'future',
     ],
     extras_require={
         'error_info': ['tblib'],
     },
     tests_require=[
-        'pytest', 'tblib'
+        'pytest', 'pytest-cov', 'tblib'
     ],
     cmdclass={'test': PyTest},
     python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',

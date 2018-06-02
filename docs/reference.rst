@@ -58,7 +58,7 @@ Evaluation
 Errors
 ------
 
-.. autoclass:: EagerAccessException
+.. autoclass:: PrefetchException
 
 Tools
 -----

@@ -1,4 +1,4 @@
-from .evaluation import add_cache, EagerAccessException, prefetch, eager_iter
+from .evaluation import add_cache, PrefetchException, prefetch, eager_iter
 from .indexing import gather, take, reindex, cycle, interleave, repeat
 from .mapping import smap, starmap
 from .serialization import SerializableFunc
