@@ -26,7 +26,7 @@ setup(
     license="MPL2",
     url="https://github.com/nlgranger/SeqTools",
     packages=['seqtools'],
-    version='0.8.0',
+    version='0.8.1',
     install_requires=[
         'typing;python_version<"3.6"',
         'backports.weakref;python_version<"3"',

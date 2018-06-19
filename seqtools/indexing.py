@@ -65,7 +65,13 @@ class Reindexing(Sequence):
 
 
 def gather(sequence, indexes):
-    """Returns a view on the sequence reordered by indexes."""
+    """Returns a view on the sequence reordered by indexes.
+
+    .. image:: gather.png
+       :alt: gather
+       :width: 15%
+       :align: center
+    """
     return Reindexing(sequence, indexes)
 
 
@@ -143,7 +149,13 @@ class InfiniteCycle(Iterable):
 
 
 def cycle(sequence, limit=None):
-    """Returns a view of the repeated sequence with an optional size limit."""
+    """Returns a view of the repeated sequence with an optional size limit.
+
+    .. image:: cycle.png
+       :alt: collate
+       :width: 10%
+       :align: center
+    """
     if limit is None:
         return InfiniteCycle(sequence)
     else:
@@ -215,6 +227,11 @@ def interleave(*sequences):
     >>> arr3 = [.1, .2, .3, .4]
     >>> list(interleave(arr1, arr2, arr3))
     [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
+
+    .. image:: interleaving.png
+       :alt: interleaving
+       :width: 30%
+       :align: center
     """
     return Interleaving(sequences)
 
@@ -317,6 +334,11 @@ class InfiniteRepetition(Iterable):
 def repeat(value, times=None):
     """Returns a sequence repeating the given value with an optional size
     limit.
+
+    .. image:: repeat.png
+       :alt: repeat
+       :width: 10%
+       :align: center
     """
     if isint(times) and times > 1:
         return Repetition(value, times)

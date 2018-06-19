@@ -44,6 +44,11 @@ def collate(sequences):
     >>> arr = collate([[1, 2, 3, 4], ['a', 'b', 'c', 'd'], [5, 6, 7, 8]])
     >>> arr[2]
     (3, 'c', 7)
+
+    .. image:: collate.png
+       :alt: collate
+       :width: 50%
+       :align: center
     """
     return Collation(sequences)
 
@@ -80,7 +85,13 @@ class Concatenation(Sequence):
 
 
 def concatenate(sequences):
-    """Returns a view on the concatenated sequences."""
+    """Returns a view on the concatenated sequences.
+
+    .. image:: concatenate.png
+       :alt: concatenate
+       :width: 25%
+       :align: center
+    """
     return Concatenation(sequences)
 
 
@@ -151,6 +162,11 @@ def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
     :param collate_fn:
         an optional function that takes a sequence of items and
         returns a consolidated batch.
+
+    .. image:: batch.png
+       :alt: batch
+       :width: 25%
+       :align: center
     """
     return BatchView(sequence, k, drop_last, pad, collate_fn)
 
@@ -241,7 +257,7 @@ class Split(Sequence):
 
 
 def split(sequence, edges):
-    """Splits a sequence into subsequences.
+    """Splits a sequence into a succession of subsequences.
 
     :param sequence:
         Input sequence.

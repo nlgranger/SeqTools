@@ -74,6 +74,11 @@ def smap(f, *sequence):
     computing now
     computing now
     [5, 5, 5, 5]
+
+    .. image:: smap.png
+       :alt: smap
+       :width: 20%
+       :align: center
     """
     stack = [(file, line, func, ctx[0].strip('\n') if ctx else '?')
              for _, file, line, func, ctx, _

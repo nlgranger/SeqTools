@@ -25,7 +25,8 @@ sequences (anything that supports indexing such as lists, arrays, etc.). It was
 concieved with **delayed evaluation** in mind to help setup and test chained
 transformation pipelines very quickly. It also supports **slice based
 indexing** and **assignment** when possible so that you can forget that
-you are not working with lists directly!
+you are not working with lists directly! Finally it features **prefetching** with either
+threads or processes to maximize computation speed.
 
 Delayed (aka lazy or ondemand) evaluation is easily understood by looking at
 this example:
@@ -84,10 +85,23 @@ With seqtools:
 502
 
 
+Batteries included!
+-------------------
+
+The library comes with a set of helper functions to help manipulate sequences:
+`concatenation <reference.html#seqtools.concatenate>`_,
+`batching <reference.html#seqtools.batch>`_,
+`reindexing <reference.html#seqtools.gather>`_,
+`interleaving <reference.html#seqtools.interleave>`_,
+`prefetching <reference.html#seqtools.prefetch>`_
+and others (suggestions are also welcome).
+
+
 Similar libraries
 -----------------
 
-- `Fuel <http://fuel.readthedocs.io/en/latest>`_ is a higher level library
-  targeted toward Machine Learning and dataset manipulation.
+These libaries provide comparable functionalities, but mostly for iterable containers:
+
 - `torchvision.transforms <http://pytorch.org/docs/master/torchvision/transforms.html>`_
   and `torch.utils.data <http://pytorch.org/docs/master/data.html>`_.
+- `TensorPack <https://github.com/tensorpack/tensorpack>`_

@@ -365,8 +365,13 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1):
 
     .. note::
         Exceptions raised in the workers while reading the sequence values will
-        trigger an :class:`EagerAccessException`. When possible, information on
+        trigger an :class:`PrefetchException`. When possible, information on
         the cause of failure will be provided in the exception message.
+
+    .. image:: prefetch.png
+       :alt: gather
+       :width: 30%
+       :align: center
     """
     if method == "thread":
         return ThreadedSequence(sequence, max_cached, nworkers, timeout)
