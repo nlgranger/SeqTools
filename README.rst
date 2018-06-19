@@ -84,12 +84,35 @@ Batteries included!
 -------------------
 
 The library comes with a set of helper functions to help manipulate sequences:
-`concatenation <http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.concatenate>`_,
-`batching <http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.batch>`_,
-`reindexing <http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.gather>`_,
-`interleaving <http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.interleave>`_,
-`prefetching <http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.prefetch>`_
-and others (suggestions are also welcome).
+
+.. |concatenate| image:: docs/concatenate.png
+
+.. _concatenation: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.concatenate
+
+.. |batch| image:: docs/batch.png
+
+.. _batching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.batch>
+
+.. |gather| image:: docs/gather.png
+
+.. _reindexing: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.gather
+
+.. |prefetch| image:: docs/prefetch.png
+
+.. _prefetching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.prefetch
+
+.. |interleaving| image:: docs/interleaving.png
+
+.. _interleaving: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.interleave
+
+==================== ================= ===============
+| |concatenate|      | |batch|         | |gather|
+| `concatenation`_   | `batching`_     | `reindexing`_
+| |prefetch|         | |interleaving|
+| `prefetching`_     | `interleaving`_
+==================== ================= ===============
+
+... and others (suggestions are also welcome).
 
 
 Installation

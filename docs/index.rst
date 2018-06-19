@@ -89,12 +89,35 @@ Batteries included!
 -------------------
 
 The library comes with a set of helper functions to help manipulate sequences:
-`concatenation <reference.html#seqtools.concatenate>`_,
-`batching <reference.html#seqtools.batch>`_,
-`reindexing <reference.html#seqtools.gather>`_,
-`interleaving <reference.html#seqtools.interleave>`_,
-`prefetching <reference.html#seqtools.prefetch>`_
-and others (suggestions are also welcome).
+
+.. |concatenate| image:: concatenate.png
+
+.. _concatenation: reference.html#seqtools.concatenate
+
+.. |batch| image:: batch.png
+
+.. _batching: reference.html#seqtools.batch
+
+.. |gather| image:: gather.png
+
+.. _reindexing: reference.html#seqtools.gather
+
+.. |prefetch| image:: prefetch.png
+
+.. _prefetching: reference.html#seqtools.prefetch
+
+.. |interleaving| image:: interleaving.png
+
+.. _interleaving: reference.html#seqtools.interleave
+
+==================== ================= ===============
+| |concatenate|      | |batch|         | |gather|
+| `concatenation`_   | `batching`_     | `reindexing`_
+| |prefetch|         | |interleaving|
+| `prefetching`_     | `interleaving`_
+==================== ================= ===============
+
+... and others (suggestions are also welcome).
 
 
 Similar libraries
