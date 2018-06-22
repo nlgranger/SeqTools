@@ -1,6 +1,23 @@
 from random import random, randint
 import pytest
-from seqtools import gather, cycle, interleave, repeat
+from seqtools import arange, gather, cycle, interleave, repeat
+
+
+def test_arange():
+    tests = [(10,),
+             (0,),
+             (0, -10, 1),
+             (10, -10, -3)]
+    slices = [slice(None, None, None),
+              slice(1, -1, 3),
+              slice(None, None, -3)]
+
+    for t in tests:
+        arr = list(range(*t))
+        assert arr == list(arange(*t))
+        assert arr == [x for x in arange(*t)]
+        for s in slices:
+            assert arr[s] == list(arange(*t)[s])
 
 
 def test_reindex():

@@ -5,7 +5,7 @@ import time
 from seqtools.utils import SeqSlice, SharedCtypeQueue
 
 
-def test_sliceview():
+def test_slice():
     arr = list(range(100))
 
     keys = [

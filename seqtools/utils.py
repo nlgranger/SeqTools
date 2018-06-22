@@ -73,27 +73,52 @@ def basic_setitem(f):
 
 
 def normalize_slice(start, stop, step, n):
-    step = 1 if step is None else step
-    start = start if start is not None else 0 if step > 0 else n - 1
-    stop = stop if stop is not None else n if step > 0 else 0
+    """Normalize slice boundaries so that an index can be easily computed by
+    `start` + i * step`
 
-    if step == 0:
+    Arguments
+    ---------
+    start: Union[int, None]
+        start index
+    stop: Union[int, None]
+        stop index
+    step: Union[int, None]
+        step size
+    n: int
+        size of the sliced sequence
+
+    Returns
+    -------
+    Tuple[int, int, int]
+        `start` in range [0, n-1], `stop = start + numel * step` with numel the
+        number of elements in the slice and `step` the step size.
+    """
+    if step is None:
+        step = 1
+    elif step == 0:
         raise ValueError("slice step cannot be 0")
 
-    start = max(-n, min(start, n - 1))
-    if start < 0:
-        start += n
-    stop = max(-n - 1, min(stop, n))
-    if stop < 0:
-        stop += n
-
-    if (stop - start) * step <= 0:
-        return 0, 0, 1
-
-    if step > 0:
-        stop += step - ((stop - start - 1) % step) - 1
+    if start is None:
+        start = 0 if step > 0 else n - 1
+    elif start >= 0:
+        start = min(start, n - 1)
     else:
-        stop -= -step - ((start - stop - 1) % -step) - 1
+        start = max(0, n + start)
+
+    if stop is None:
+        stop = n if step > 0 else -1
+    elif stop >= 0:
+        stop = min(stop, n)
+    else:
+        stop = max(-1, n + stop)
+
+    if (stop - start) / step < 0:
+        stop = start
+
+    n = abs(stop - start) - 1
+    s = abs(step)
+    numel = (n + s - (n % s)) // s
+    stop = start + numel * step
 
     return start, stop, step
 
@@ -101,20 +126,19 @@ def normalize_slice(start, stop, step, n):
 class SeqSlice(Sequence):
     def __init__(self, sequence, key):
         if isinstance(sequence, SeqSlice):
-            oldkey_start = sequence.start
-            oldkey_step = sequence.step
             key_start, key_stop, key_step = normalize_slice(
                 key.start, key.stop, key.step, len(sequence))
-            start = oldkey_start + key_start * oldkey_step
-            stop = oldkey_start + key_stop * oldkey_step
-            step = key_step * oldkey_step
+            numel = abs(key_stop - key_start) // abs(key_step)
+            start = sequence.start + key_start * sequence.step
+            step = key_step * sequence.step
+            stop = start + step * numel
             sequence = sequence.sequence
 
         else:
-            start, stop, step = key.start, key.stop, key.step
+            start, stop, step = normalize_slice(
+                key.start, key.stop, key.step, len(sequence))
 
         self.sequence = sequence
-        start, stop, step = normalize_slice(start, stop, step, len(sequence))
         self.start = start
         self.stop = stop
         self.step = step

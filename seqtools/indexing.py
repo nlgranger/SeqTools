@@ -1,9 +1,61 @@
 from typing import Sequence, Iterable
+from numbers import Integral
 import itertools
 import bisect
 from array import array
+from future.builtins import range
+
 import logging
-from .utils import isint, basic_getitem, basic_setitem
+from .utils import isint, basic_getitem, basic_setitem, normalize_slice
+
+
+class Range(Sequence):
+    def __init__(self, start, stop=None, step=None):
+        if stop is None and step is None:
+            stop = start
+            start = 0
+
+        if step is None:
+            step = 1
+
+        if (stop - start) / step < 0:
+            stop = start
+
+        n = abs(stop - start) - 1
+        s = abs(step)
+        numel = (n + s - (n % s)) // s
+        stop = start + step * numel
+
+        self.start, self.stop, self.step = start, stop, step
+
+    def __len__(self):
+        return abs(self.stop - self.start) // abs(self.step)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start, stop, step = normalize_slice(key.start, key.stop, key.step, len(self))
+            numel = abs(stop - start) / abs(step)
+
+            start = self.start + self.step * start
+            step = self.step * step
+            stop = start + step * numel
+
+            return Range(start, stop, step)
+
+        elif not isinstance(key, Integral):
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + key.__class__.__name__)
+
+        return self.start + self.step * key
+
+    def __iter__(self):
+        return iter(range(self.start, self.stop, self.step))
+
+
+def arange(start, stop=None, step=None):
+    """Sequence equivalent of Python built-in :func:`range`."""
+    return Range(start, stop, step)
 
 
 class Reindexing(Sequence):
