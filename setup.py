@@ -17,26 +17,30 @@ class PyTest(TestCommand):
         sys.exit(errno)
 
 
+with open("README.rst", 'rb') as f:
+    long_description = f.read().decode('utf-8')
+
+
 setup(
     name='seqtools',
     author="Nicolas Granger",
     author_email="nicolas.granger.m@gmail.com",
     description="A python library for lazy mapping of functions over "
                 "sequences.",
+    long_description=long_description,
+    long_description_content_type='text/x-rst',
     license="MPL2",
     url="https://github.com/nlgranger/SeqTools",
     packages=['seqtools'],
     version='0.8.1',
     install_requires=[
+        'tblib',
         'typing;python_version<"3.6"',
         'backports.weakref;python_version<"3"',
         'monotonic;python_version<"3"',
         'enum34;python_version<"3"',
         'future',
     ],
-    extras_require={
-        'error_info': ['tblib'],
-    },
     tests_require=[
         'pytest', 'pytest-cov', 'tblib'
     ],

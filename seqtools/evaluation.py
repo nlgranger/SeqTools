@@ -14,18 +14,14 @@ import logging
 from enum import IntEnum
 from typing import Sequence
 from numbers import Integral
-
-try:
-    import tblib
-except ImportError:
-    tblib = None
+import tblib
 
 from future.utils import raise_from, raise_with_traceback
 
 from .utils import basic_getitem, basic_setitem, SharedCtypeQueue
 
 
-# ---------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 class CachedSequence(Sequence):
     def __init__(self, sequence, cache_size=1, cache=None):
@@ -71,7 +67,7 @@ def add_cache(arr, cache_size=1, cache=None):
     return CachedSequence(arr, cache_size, cache)
 
 
-# ---------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 class PrefetchException(RuntimeError):
     pass
@@ -84,7 +80,7 @@ class JobStatus(IntEnum):
 
 
 class AsyncSequence(Sequence):
-    def __init__(self, sequence, buffer_size, timeout=1):
+    def __init__(self, sequence, buffer_size, timeout=1, start_hook=None):
         # Worker logic
         if buffer_size < 1:
             raise ValueError("buffer size must be stricly positive")
@@ -96,6 +92,7 @@ class AsyncSequence(Sequence):
         self.q_out = None
         self.workers = []
         self.timeout = timeout
+        self.start_hook = start_hook
 
         # Sorting logic
         self.max_queued = buffer_size
@@ -156,7 +153,8 @@ class AsyncSequence(Sequence):
                         w = w.__class__(
                             target=self.__class__.target,
                             args=(self.sequence, self.local_cache, self.errors,
-                                  self.q_in, self.q_out, self.timeout))
+                                  self.q_in, self.q_out,
+                                  self.timeout, self.start_hook))
                         w.start()
                         self.workers[i] = w
 
@@ -216,7 +214,7 @@ class AsyncSequence(Sequence):
             raise RuntimeError(tb)
 
     @staticmethod
-    def target(sequence, local_cache, errors, q_in, q_out, timeout):
+    def target(sequence, local_cache, errors, q_in, q_out, timeout, start_hook):
         raise NotImplementedError
 
     @staticmethod
@@ -234,8 +232,10 @@ class AsyncSequence(Sequence):
 
 
 class ThreadedSequence(AsyncSequence):
-    def __init__(self, sequence, buffer_size, nworkers=0, timeout=1):
-        super(ThreadedSequence, self).__init__(sequence, buffer_size, timeout)
+    def __init__(self, sequence, buffer_size,
+                 nworkers=0, timeout=1, start_hook=None):
+        super(ThreadedSequence, self).__init__(
+            sequence, buffer_size, timeout, start_hook)
 
         self.local_cache = [None] * buffer_size
         self.errors = [(None, None, "")] * buffer_size
@@ -253,12 +253,15 @@ class ThreadedSequence(AsyncSequence):
             w = threading.Thread(
                 target=self.__class__.target,
                 args=(self.sequence, self.local_cache, self.errors,
-                      self.q_in, self.q_out, self.timeout))
+                      self.q_in, self.q_out, self.timeout, self.start_hook))
             w.start()
             self.workers.append(w)
 
     @staticmethod
-    def target(sequence, local_cache, errors, q_in, q_out, timeout):
+    def target(sequence, local_cache, errors, q_in, q_out, timeout, start_hook):
+        if start_hook is not None:
+            start_hook()
+
         while True:
             try:
                 item, slot = q_in.get(timeout=timeout)
@@ -282,8 +285,10 @@ class ThreadedSequence(AsyncSequence):
 
 
 class MultiprocessSequence(AsyncSequence):
-    def __init__(self, sequence, buffer_size, nworkers=0, timeout=1):
-        super(MultiprocessSequence, self).__init__(sequence, buffer_size, timeout)
+    def __init__(self, sequence, buffer_size,
+                 nworkers=0, timeout=1, start_hook=None):
+        super(MultiprocessSequence, self).__init__(
+            sequence, buffer_size, timeout, start_hook)
 
         manager = multiprocessing.Manager()
         self.local_cache = manager.list([None] * buffer_size)
@@ -302,12 +307,15 @@ class MultiprocessSequence(AsyncSequence):
             w = multiprocessing.Process(
                 target=self.__class__.target,
                 args=(self.sequence, self.local_cache, self.errors,
-                      self.q_in, self.q_out, self.timeout))
+                      self.q_in, self.q_out, self.timeout, self.start_hook))
             w.start()
             self.workers.append(w)
 
     @staticmethod
-    def target(sequence, local_cache, errors, q_in, q_out, timeout):
+    def target(sequence, local_cache, errors, q_in, q_out, timeout, start_hook):
+        if start_hook is not None:
+            start_hook()
+
         try:
             while True:
                 try:
@@ -340,28 +348,32 @@ class MultiprocessSequence(AsyncSequence):
             return  # parent probably died
 
 
-def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1):
-    """Returns a view over the sequence backed by multiple workers in order to
-    fetch values ahead.
+def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
+             start_hook=None):
+    """Returns a view over the sequence backed by multiple workers in
+    order to fetch values ahead.
 
     :param sequence:
         a sequence of values to iterate over
     :param max_cached:
         maximum number of locally stored values waiting to be read.
     :param nworkers:
-        number of workers or number of spared cpu cores negative or null.
+        number of workers, negative values indicate the number of cpu
+        cores to spare (default: number of cpu core)
     :param method:
         type of workers:
 
-        - `'thread'` uses `threading.Thread` which is prefereable when many
-          operations realeasing the GIL such as IO operations are involved.
-          However only one thread is active at any given time.
+        - `'thread'` uses `threading.Thread` which has low overhead but
+          allows only one active worker at a time, ideal for IO-bound
+          operations.
         - `'process'` uses `multiprocessing.Process` which provides full
-          parallelism but induces extra cpu and memory operations because the
-          results must be serialized and copied from the workers back to main
-          thread.
+          parallelism but adds communication overhead between workers
+          and the parent process.
     :param timeout:
-        idle workers timeout, a vaue too small will trigger spurious wake-up delay.
+        maximum idling time for workers, workers will be restarted
+        automatically if needed
+    :param start_hook:
+        optional callback executed by each workers on start.
 
     .. note::
         Exceptions raised in the workers while reading the sequence values will
@@ -374,9 +386,9 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1):
        :align: center
     """
     if method == "thread":
-        return ThreadedSequence(sequence, max_cached, nworkers, timeout)
+        return ThreadedSequence(sequence, max_cached, nworkers, timeout, start_hook)
     elif method == "process" or method == "proc":
-        return MultiprocessSequence(sequence, max_cached, nworkers, timeout)
+        return MultiprocessSequence(sequence, max_cached, nworkers, timeout, start_hook)
     else:
         raise ValueError("unsupported method")
 
