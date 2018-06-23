@@ -33,8 +33,9 @@ class Range(Sequence):
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            start, stop, step = normalize_slice(key.start, key.stop, key.step, len(self))
-            numel = abs(stop - start) / abs(step)
+            start, stop, step = normalize_slice(
+                key.start, key.stop, key.step, len(self))
+            numel = abs(stop - start) // abs(step)
 
             start = self.start + self.step * start
             step = self.step * step
@@ -54,7 +55,9 @@ class Range(Sequence):
 
 
 def arange(start, stop=None, step=None):
-    """Sequence equivalent of Python built-in :func:`range`."""
+    """Sequential equivalent of Python built-in
+    :class:`python:range`.
+    """
     return Range(start, stop, step)
 
 
@@ -119,7 +122,7 @@ class Reindexing(Sequence):
 def gather(sequence, indexes):
     """Returns a view on the sequence reordered by indexes.
 
-    .. image:: gather.png
+    .. image:: _static/gather.png
        :alt: gather
        :width: 15%
        :align: center
@@ -201,9 +204,10 @@ class InfiniteCycle(Iterable):
 
 
 def cycle(sequence, limit=None):
-    """Returns a view of the repeated sequence with an optional size limit.
+    """Returns a view of the repeated sequence with an optional size
+    limit.
 
-    .. image:: cycle.png
+    .. image:: _static/cycle.png
        :alt: collate
        :width: 10%
        :align: center
@@ -270,20 +274,22 @@ class Interleaving(Sequence):
 def interleave(*sequences):
     """Interleaves elements from several sequences into one.
 
-    .. note::
-       sequences don't need to have the same length, the cycling will operate
-       between whatever sequences are left.
-
-    >>> arr1 = [1, 2, 3, 4, 5]
-    >>> arr2 = ['a', 'b', 'c']
-    >>> arr3 = [.1, .2, .3, .4]
-    >>> list(interleave(arr1, arr2, arr3))
-    [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
-
-    .. image:: interleaving.png
+    .. image:: _static/interleaving.png
        :alt: interleaving
        :width: 30%
        :align: center
+
+    Note:
+       sequences don't need to have the same length, the cycling will
+       operate between whatever sequences are left.
+
+    Example:
+
+        >>> arr1 = [1, 2, 3, 4, 5]
+        >>> arr2 = ['a', 'b', 'c']
+        >>> arr3 = [.1, .2, .3, .4]
+        >>> list(interleave(arr1, arr2, arr3))
+        [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
     """
     return Interleaving(sequences)
 
@@ -384,10 +390,10 @@ class InfiniteRepetition(Iterable):
 
 
 def repeat(value, times=None):
-    """Returns a sequence repeating the given value with an optional size
-    limit.
+    """Returns a sequence repeating the given value with an optional
+    size limit.
 
-    .. image:: repeat.png
+    .. image:: _static/repeat.png
        :alt: repeat
        :width: 10%
        :align: center

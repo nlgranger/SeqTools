@@ -50,8 +50,8 @@ def test_prefetch(method):
     arr = list(range(300))
     y = smap(f1, arr)
     y = prefetch(y, nworkers=4, max_cached=10, method=method, timeout=1)
-    arr = arr[3:-1:2]
-    y = y[3:-1:2]
+    # arr = arr[3:-1:2]
+    # y = y[3:-1:2]
 
     i = 0
     n_wakeups = 3
@@ -82,7 +82,7 @@ def test_prefetch_timing(method):
     t2 = time()
 
     assert z == arr
-    assert t2 - t1 < 1.1  # hopefully better in practice...
+    assert t2 - t1 < 1.1
 
     t1 = time()
     z = [y[i] for i in range(len(y))]

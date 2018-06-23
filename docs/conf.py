@@ -35,10 +35,12 @@ import inspect
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.doctest',
-    'sphinx.ext.linkcode']
+    'sphinx.ext.linkcode',
+    'sphinx.ext.intersphinx']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -220,4 +222,10 @@ def linkcode_resolve(domain, info):
     else:
         linestart, linestop = lineno, lineno + len(source) - 1
 
-    return linkcode_url.format(filepath=filepath, linestart=linestart, linestop=linestop)
+    return linkcode_url.format(
+        filepath=filepath, linestart=linestart, linestop=linestop)
+
+
+# -- Options for Intersphinx extension -------------------------------------
+
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}

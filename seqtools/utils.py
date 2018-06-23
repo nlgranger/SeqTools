@@ -18,6 +18,12 @@ def clip(x, a, b):
 def basic_getitem(f):
     """decorator for a sane defaults implementation of __getitem__ that calls
     the actual implementation on integer keys in range 0 to len(self).
+
+    Args:
+      f: 
+
+    Returns:
+
     """
     def getitem(self, key):
         if isinstance(key, slice):
@@ -75,7 +81,7 @@ def basic_setitem(f):
 def normalize_slice(start, stop, step, n):
     """Normalize slice boundaries so that an index can be easily computed by
     `start` + i * step`
-
+    
     Arguments
     ---------
     start: Union[int, None]
@@ -87,11 +93,15 @@ def normalize_slice(start, stop, step, n):
     n: int
         size of the sliced sequence
 
-    Returns
-    -------
-    Tuple[int, int, int]
-        `start` in range [0, n-1], `stop = start + numel * step` with numel the
-        number of elements in the slice and `step` the step size.
+    Args:
+      start: 
+      stop: 
+      step: 
+      n: 
+
+    Returns:
+
+    
     """
     if step is None:
         step = 1

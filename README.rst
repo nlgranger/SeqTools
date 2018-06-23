@@ -85,23 +85,23 @@ Batteries included!
 
 The library comes with a set of helper functions to help manipulate sequences:
 
-.. |concatenate| image:: docs/concatenate.png
+.. |concatenate| image:: docs/_static/concatenate.png
 
 .. _concatenation: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.concatenate
 
-.. |batch| image:: docs/batch.png
+.. |batch| image:: docs/_static/batch.png
 
 .. _batching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.batch>
 
-.. |gather| image:: docs/gather.png
+.. |gather| image:: docs/_static/gather.png
 
 .. _reindexing: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.gather
 
-.. |prefetch| image:: docs/prefetch.png
+.. |prefetch| image:: docs/_static/prefetch.png
 
 .. _prefetching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.prefetch
 
-.. |interleaving| image:: docs/interleaving.png
+.. |interleaving| image:: docs/_static/interleaving.png
 
 .. _interleaving: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.interleave
 

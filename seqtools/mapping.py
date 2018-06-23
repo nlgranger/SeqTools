@@ -54,31 +54,31 @@ def smap(f, *sequence):
     items will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
 
-    Example:
-
-    >>> a = [1, 2, 3, 4]
-    >>> print([v + 2 for v in a])
-    [3, 4, 5, 6]
-    >>> m = smap(lambda x: x + 2, a)
-    >>> print([v for v in m])
-    [3, 4, 5, 6]
-    >>> def do(y, z):
-    ...     print("computing now")
-    ...     return y + z
-    ...
-    >>> a, b = [1, 2, 3, 4], [4, 3, 2, 1]
-    >>> m = smap(do, a, b)
-    >>> print([v for v in m])
-    computing now
-    computing now
-    computing now
-    computing now
-    [5, 5, 5, 5]
-
-    .. image:: smap.png
+    .. image:: _static/smap.png
        :alt: smap
        :width: 20%
        :align: center
+
+    Example:
+
+        >>> a = [1, 2, 3, 4]
+        >>> print([v + 2 for v in a])
+        [3, 4, 5, 6]
+        >>> m = smap(lambda x: x + 2, a)
+        >>> print([v for v in m])
+        [3, 4, 5, 6]
+        >>> def do(y, z):
+        ...     print("computing now")
+        ...     return y + z
+        ...
+        >>> a, b = [1, 2, 3, 4], [4, 3, 2, 1]
+        >>> m = smap(do, a, b)
+        >>> print([v for v in m])
+        computing now
+        computing now
+        computing now
+        computing now
+        [5, 5, 5, 5]
     """
     stack = [(file, line, func, ctx[0].strip('\n') if ctx else '?')
              for _, file, line, func, ctx, _
@@ -92,7 +92,8 @@ def smap(f, *sequence):
 
 
 def starmap(f, sequence):
-    """Similar to :func:`smap` but the elements of the sequence are assumed to
-    be tuple of arguments for `f`.
+    """Maps a function over a sequence of argument tuples.
+
+    This a sequential equaivalent of :func:`python:itertools.starmap`.
     """
     return smap(lambda x: f(*x), sequence)

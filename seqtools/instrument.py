@@ -59,31 +59,33 @@ class Debug:
 
 
 def debug(sequence, func, max_calls=None, max_rate=None):
-    """Wrap a sequence to trigger a debug function on element reads.
+    """Wraps a sequence to trigger a function on each read.
 
-    :param sequence:
-        source sequence
-    :param func:
-        a function to call whenever an item is read, must take the index
-        and value of the items
-    :param max_calls:
-        an optional count limit on how many times func is invoked
-    :param max_rate:
-        an optional rate limit to avoid spamming `func`
+    Args:
+        sequence (Sequence):
+            Source sequence.
+        func (Callable):
+            A function to call whenever an item is read, must take the
+            index and value of the items.
+        max_calls (Optional[int]):
+            An optional count limit on how many times `func` is invoked
+            (default None).
+        max_rate (Optional[int]):
+            An optional rate limit to avoid spamming `func`.
 
     Example:
 
-    .. testsetup::
+        .. testsetup::
 
-        from seqtools.instrument import debug
+           from seqtools.instrument import debug
 
-    >>> sequence = [1, 2, 3, 4, 5]
-    >>> watchthis = debug(sequence, lambda i, v: print(v), 2)
-    >>> x = watchthis[0]
-    1
-    >>> y = watchthis[2]
-    3
-    >>> z = watchthis[3]
+        >>> sequence = [1, 2, 3, 4, 5]
+        >>> watchthis = debug(sequence, lambda i, v: print(v), 2)
+        >>> x = watchthis[0]
+        1
+        >>> y = watchthis[2]
+        3
+        >>> z = watchthis[3]
     """
     return Debug(sequence, func, max_calls, max_rate)
 
@@ -99,7 +101,7 @@ class ThroughputMonitor:
         self.time_spent = 0
 
     def throughput(self):
-        """Return item read throughput in Hz."""
+        """ """
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure throughput before any element was accessed")
@@ -107,7 +109,7 @@ class ThroughputMonitor:
         return self.n_calls / self.time_spent
 
     def read_delay(self):
-        """Return average item read delay."""
+        """ """
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure read delay before any element was accessed")
@@ -153,10 +155,13 @@ class ThroughputMonitor:
 
 
 def monitor_throughput(sequence):
-    """Wrap a sequence to add two methods, `throughput` and `read_delay` which
-    return the average item read rate and duration respectively.
+    """Wraps a sequence and adds two methods:
 
-    Calling this method before having read any element raise VallueError since
-    no statistics are available.
+    * `read_delay` the average time it takes to read an item.
+    * `throughput` the invert of the above.
+
+    Raises:
+        ValueError: raised when quiering statistics before any measure
+            has been taken.
     """
     return ThroughputMonitor(sequence)

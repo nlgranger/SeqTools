@@ -12,14 +12,15 @@ else:
 
 
 class SerializableFunc:
-    """Make a function independent from its source file.
+    """Makes a function independent from its source file.
 
     This decorator alters the serialization hook so that unpickling the
     pickled function will import a back-up of the original source code.
 
     .. warning::
-        This is a hackish solution where only the source file containing the
-        function is saved, regenerated and reloaded. Use with care.
+        This is a hackish solution where only the source file
+        containing the function is saved, regenerated and reloaded.
+        Use with care.
     """
     def __init__(self, func):
         if isinstance(func, SerializableFunc):

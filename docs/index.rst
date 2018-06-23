@@ -6,6 +6,7 @@
    tutorial
    reference
    examples
+   internal
 
 
 .. testsetup::
@@ -90,23 +91,23 @@ Batteries included!
 
 The library comes with a set of helper functions to help manipulate sequences:
 
-.. |concatenate| image:: concatenate.png
+.. |concatenate| image:: _static/concatenate.png
 
 .. _concatenation: reference.html#seqtools.concatenate
 
-.. |batch| image:: batch.png
+.. |batch| image:: _static/batch.png
 
 .. _batching: reference.html#seqtools.batch
 
-.. |gather| image:: gather.png
+.. |gather| image:: _static/gather.png
 
 .. _reindexing: reference.html#seqtools.gather
 
-.. |prefetch| image:: prefetch.png
+.. |prefetch| image:: _static/prefetch.png
 
 .. _prefetching: reference.html#seqtools.prefetch
 
-.. |interleaving| image:: interleaving.png
+.. |interleaving| image:: _static/interleaving.png
 
 .. _interleaving: reference.html#seqtools.interleave
 

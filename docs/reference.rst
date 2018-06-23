@@ -15,6 +15,7 @@ API Reference
     collate
     concatenate
     cycle
+    arange
     gather
     take
     interleave
@@ -36,6 +37,7 @@ Mapping
 Indexing and reshaping
 ----------------------
 
+.. autofunction:: arange
 .. autofunction:: gather
 .. autofunction:: take
 .. autofunction:: concatenate

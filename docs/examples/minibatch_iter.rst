@@ -8,7 +8,7 @@ routine.
 
 Often, heavy duty computations like this will be run in a separate thread
 leaving some computation time available for other threads. We want to use this
-moment to prepare the next minibatches so that the process function never waits
+moment to _prepare the next minibatches so that the process function never waits
 for its data.
 
 To simulate this free computation time, our central processing function will

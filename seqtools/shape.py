@@ -39,16 +39,18 @@ def collate(sequences):
 
     The n'th element is a tuple of the n'th elements from each sequence.
 
-    Example:
-
-    >>> arr = collate([[1, 2, 3, 4], ['a', 'b', 'c', 'd'], [5, 6, 7, 8]])
-    >>> arr[2]
-    (3, 'c', 7)
-
-    .. image:: collate.png
+    .. image:: _static/collate.png
        :alt: collate
        :width: 50%
        :align: center
+
+    Example:
+
+        >>> arr = collate([[ 1,   2,   3,   4],
+        ...                ['a', 'b', 'c', 'd'],
+        ...                [ 5,   6,   7,   8]])
+        >>> arr[2]
+        (3, 'c', 7)
     """
     return Collation(sequences)
 
@@ -87,7 +89,7 @@ class Concatenation(Sequence):
 def concatenate(sequences):
     """Returns a view on the concatenated sequences.
 
-    .. image:: concatenate.png
+    .. image:: _static/concatenate.png
        :alt: concatenate
        :width: 25%
        :align: center
@@ -148,25 +150,30 @@ class BatchView(Sequence):
 def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
     """Returns a view of a sequence in groups of k items.
 
-    :param sequence:
-        the input sequence
-    :param k:
-        number of items by block
-    :param drop_last:
-        wether the last block should be ignored if it contains less than k
-        items.
-    :param pad:
-        padding item value to use in order to increase the size of the last
-        block to k elements, set to `None` to prevent padding and return
-        an incomplete block anyways.
-    :param collate_fn:
-        an optional function that takes a sequence of items and
-        returns a consolidated batch.
+    .. image:: _static/batch.png
+        :alt: batch
+        :width: 25%
+        :align: center
 
-    .. image:: batch.png
-       :alt: batch
-       :width: 25%
-       :align: center
+    Args:
+        sequence (Sequence):
+            The input sequence.
+        k (int):
+            Number of items by block.
+        drop_last (bool):
+            Wether the last block should be ignored if it contains less
+            than k items. (default False)
+        pad (Optional[any]):
+            padding item value to use in order to increase the size of
+            the last block to k elements, set to `None` to prevent
+            padding and return an incomplete block anyways (default
+            None).
+        collate_fn (Callable[[Sequence], Sequence]):
+            An optional function that takes a sequence of items and
+            returns a consolidated batch.
+
+    Returns:
+        Sequence: A sequence of batches.
     """
     return BatchView(sequence, k, drop_last, pad, collate_fn)
 
@@ -187,20 +194,26 @@ class Unbatching:
         return self.sequence[b][i]
 
     def __iter__(self):
-        for b in self.sequence:
+        for b in self.sequence (Sequence):
             for v in b:
                 yield v
 
 
 def unbatch(sequence, batch_size, last_batch_size=None):
-    """Recomposes a sequence of batched items.
+    """Returns a view on the concatenation of batched items.
 
-    :param sequence:
-        A sequence of batches
-    :param batch_size:
-        The size of the batches, except for the last one which can be smaller.
-    :param last_batch_size:
-        The size for the last batch if it is smaller than `batch_size`
+    Args:
+        sequence (Sequence[Sequence]):
+            A sequence of batches.
+        batch_size (int):
+            The size of the batches, except for the last one which can
+            be smaller.
+        last_batch_size (int or None):
+            The size for the last batch if it is smaller than
+            `batch_size` (default None).
+
+    Returns:
+        Sequence: The concatenation of all batches in `sequence`.
     """
     return Unbatching(sequence, batch_size, last_batch_size)
 
@@ -259,15 +272,19 @@ class Split(Sequence):
 def split(sequence, edges):
     """Splits a sequence into a succession of subsequences.
 
-    :param sequence:
-        Input sequence.
-    :param edges:
-        `edges` specifies how to split the sequence:
+    Args:
+        sequence (Sequence):
+            Input sequence.
+        edges (Sequence[int] or int or Sequence[Tuple[int, int]]):
+            `edges` specifies how to split the sequence
 
-        - a 1D array that contains the indexes where the sequence should be
-          cut, the beginning and the end of the sequence are implicit.
-        - an int specifies how many cuts of equal size should be done, in which
-          case `edges + 1` must divide the length of the sequence.
-        - an sequence of int tuples specifies the limits of subsequences.
+            - A 1D array that contains the indexes where the sequence
+              should be cut, the beginning and the end of the sequence
+              are implicit.
+            - An int specifies how many cuts of equal size should be
+              done, in which case `edges + 1` must divide the length of
+              the sequence.
+            - An sequence of int tuples specifies the limits of
+              subsequences.
     """
     return Split(sequence, edges)
