@@ -18,10 +18,11 @@ TLDR; Like python's itertools but for sequences.
 This library is designed to facilitate the manipulation and transformation of
 sequences (anything that supports indexing such as lists, arrays, etc.). It was
 concieved with **delayed evaluation** in mind to help setup and test chained
-transformation pipelines very quickly. It also supports **slice based
-indexing** and **assignment** when possible so that you can forget that
-you are not working with lists directly! Finally it features **prefetching** with either
-threads or processes to maximize computation speed.
+transformation pipelines very quickly like views in numpy but more flexible.
+
+It supports **slice based indexing** and **assignment** when possible so that
+you can forget that you are not working with lists directly! Finally it features
+**prefetching** with either threads or processes to maximize computation speed.
 
 Delayed (aka lazy or ondemand) evaluation is easily understood by looking at
 this example:
@@ -87,23 +88,23 @@ The library comes with a set of helper functions to help manipulate sequences:
 
 .. |concatenate| image:: docs/_static/concatenate.png
 
-.. _concatenation: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.concatenate
+.. _concatenation: http://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.concatenate
 
 .. |batch| image:: docs/_static/batch.png
 
-.. _batching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.batch>
+.. _batching: http://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.batch>
 
 .. |gather| image:: docs/_static/gather.png
 
-.. _reindexing: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.gather
+.. _reindexing: http://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.gather
 
 .. |prefetch| image:: docs/_static/prefetch.png
 
-.. _prefetching: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.prefetch
+.. _prefetching: http://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.prefetch
 
 .. |interleaving| image:: docs/_static/interleaving.png
 
-.. _interleaving: http://seqtools-doc.readthedocs.io/en/stable/reference.html#seqtools.interleave
+.. _interleaving: http://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.interleave
 
 ==================== ================= ===============
 | |concatenate|      | |batch|         | |gather|

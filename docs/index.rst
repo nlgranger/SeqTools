@@ -1,3 +1,6 @@
+SeqTools
+========
+
 .. toctree::
    :hidden:
    :includehidden:
@@ -16,18 +19,16 @@
    import time
 
 
-SeqTools
-========
-
 TLDR; Like python's itertools but for sequences.
 
 This library is designed to facilitate the manipulation and transformation of
 sequences (anything that supports indexing such as lists, arrays, etc.). It was
 concieved with **delayed evaluation** in mind to help setup and test chained
-transformation pipelines very quickly. It also supports **slice based
-indexing** and **assignment** when possible so that you can forget that
-you are not working with lists directly! Finally it features **prefetching** with either
-threads or processes to maximize computation speed.
+transformation pipelines very quickly like views in numpy but more flexible.
+
+It supports **slice based indexing** and **assignment** when possible so that
+you can forget that you are not working with lists directly! Finally it features
+**prefetching** with either threads or processes to maximize computation speed.
 
 Delayed (aka lazy or ondemand) evaluation is easily understood by looking at
 this example:

@@ -1,3 +1,6 @@
+API Reference
+=============
+
 .. testsetup:: *
 
    from seqtools import *
@@ -5,26 +8,24 @@
 .. py:module:: seqtools
 
 
-API Reference
-=============
-
 .. autosummary::
+   :nosignatures:
 
-    add_cache
-    batch
-    collate
-    concatenate
-    cycle
-    arange
-    gather
-    take
-    interleave
-    prefetch
-    repeat
-    smap
-    split
-    starmap
-    unbatch
+   add_cache
+   batch
+   collate
+   concatenate
+   cycle
+   arange
+   gather
+   take
+   interleave
+   prefetch
+   repeat
+   smap
+   split
+   starmap
+   unbatch
 
 
 Mapping
@@ -57,10 +58,12 @@ Evaluation
 .. autofunction:: prefetch
 .. autoclass:: SerializableFunc
 
+
 Errors
 ------
 
 .. autoclass:: PrefetchException
+
 
 Tools
 -----
