@@ -32,7 +32,7 @@ setup(
     license="MPL2",
     url="https://github.com/nlgranger/SeqTools",
     packages=['seqtools'],
-    version='0.8.1',
+    version='0.8.3',
     install_requires=[
         'tblib',
         'typing;python_version<"3.6"',

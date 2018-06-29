@@ -5,6 +5,7 @@ from time import sleep, time
 
 from seqtools import add_cache, smap, prefetch, PrefetchException
 
+
 logging.basicConfig(level=logging.INFO)
 seed = int(random.random() * 100000)
 logging.info("seed: {}".format(seed))
@@ -18,6 +19,16 @@ def test_cached():
 
     cache_size = 3
     arr = [random.random() for _ in range(25)]
+    z = add_cache(arr, cache_size)
+
+    assert list(z) == arr
+    assert list(z[10:]) == arr[10:]
+    assert [z[i] for i in range(10)] == arr[:10]
+
+    z[:10] = list(range(0, -10, -1))
+    assert list(z[10:]) == arr[10:]
+    assert list(z[:10]) == list(range(0, -10, -1))
+
     y = smap(f, arr)
     z = add_cache(y, cache_size)
 
@@ -29,15 +40,6 @@ def test_cached():
     t2 = time()
 
     assert t2 - t1 < .28
-    arr = list(range(100))
-    z = add_cache(arr, cache_size)
-    z[-10] = -10
-    assert z[-10] == -10
-    assert arr[-10] == -10
-
-    z[:10] = list(range(0, -10, -1))
-    assert list(z[:10]) == list(range(0, -10, -1))
-    assert list(arr[:10]) == list(range(0, -10, -1))
 
 
 @pytest.mark.timeout(15)
@@ -47,9 +49,15 @@ def test_prefetch(method):
         sleep(0.005 * (1 + random.random()))
         return x
 
+    if method == "process":
+        start_hook = None
+    else:
+        start_hook = None
+
     arr = list(range(300))
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=4, max_cached=10, method=method, timeout=1)
+    y = prefetch(y, nworkers=4, max_cached=10, method=method, timeout=1,
+                 start_hook=start_hook)
     # arr = arr[3:-1:2]
     # y = y[3:-1:2]
 
@@ -64,6 +72,9 @@ def test_prefetch(method):
             i = random.randrange(0, len(arr))
         else:
             i = (i + 1) % len(arr)
+
+    # helps with coverage
+    y._finalize(y)
 
 
 @pytest.mark.timeout(15)
@@ -84,12 +95,20 @@ def test_prefetch_timing(method):
     assert z == arr
     assert t2 - t1 < 1.1
 
+    arr = list(range(200))
+    y = smap(f1, arr)
+    y = prefetch(y, nworkers=2, max_cached=20, method=method,
+                 timeout=1, anticipate=lambda i: i + 2)
+
     t1 = time()
-    z = [y[i] for i in range(len(y))]
+    z = [y[i] for i in range(0, len(y), 2)]
     t2 = time()
 
-    assert z == arr
+    assert z == arr[::2]
     assert t2 - t1 < 1.1
+
+    # helps with coverage
+    y._finalize(y)
 
 
 @pytest.mark.timeout(10)
@@ -120,6 +139,9 @@ def test_prefetch_errors(method):
         else:
             return x
 
+    # helps with coverage
+    y._finalize(y)
+
     arr2 = smap(f2, arr1)
     y = prefetch(arr2, nworkers=2, max_cached=2, method=method)
 
@@ -136,3 +158,6 @@ def test_prefetch_errors(method):
 
     assert y[0] == 1
     assert y[1] == 2
+
+    # helps with coverage
+    y._finalize(y)
