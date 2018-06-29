@@ -78,10 +78,11 @@ def test_prefetch(method):
 
 
 @pytest.mark.timeout(15)
+@pytest.mark.timing
 @pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch_timing(method):
     def f1(x):
-        sleep(.02)
+        sleep(.02 + 0.01 * (random.random() - .5))
         return x
 
     arr = list(range(100))
@@ -93,7 +94,9 @@ def test_prefetch_timing(method):
     t2 = time()
 
     assert z == arr
-    assert t2 - t1 < 1.1
+    duration = t2 - t1
+    print("test_prefetch_timing({}):1 {}".format(method, duration))
+    assert duration < 1.3
 
     arr = list(range(200))
     y = smap(f1, arr)
@@ -105,10 +108,9 @@ def test_prefetch_timing(method):
     t2 = time()
 
     assert z == arr[::2]
-    assert t2 - t1 < 1.1
-
-    # helps with coverage
-    y._finalize(y)
+    duration = t2 - t1
+    print("test_prefetch_timing({}):2 {}".format(method, duration))
+    assert duration < 1.3
 
 
 @pytest.mark.timeout(10)
