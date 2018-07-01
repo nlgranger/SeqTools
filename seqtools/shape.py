@@ -179,7 +179,7 @@ def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
 
 
 class Unbatching:
-    def __init__(self, sequence, batch_size, last_batch_size=None):
+    def __init__(self, sequence, batch_size, last_batch_size=0):
         self.sequence = sequence
         self.batch_size = batch_size
         self.last_batch_size = last_batch_size or batch_size
@@ -194,7 +194,7 @@ class Unbatching:
         return self.sequence[b][i]
 
     def __iter__(self):
-        for b in self.sequence (Sequence):
+        for b in self.sequence:
             for v in b:
                 yield v
 
@@ -208,9 +208,9 @@ def unbatch(sequence, batch_size, last_batch_size=None):
         batch_size (int):
             The size of the batches, except for the last one which can
             be smaller.
-        last_batch_size (int or None):
-            The size for the last batch if it is smaller than
-            `batch_size` (default None).
+        last_batch_size (int):
+            The size for the last batch if the batch size does not align
+            to the sequence size (default 0).
 
     Returns:
         Sequence: The concatenation of all batches in `sequence`.

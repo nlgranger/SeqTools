@@ -1,5 +1,5 @@
 from random import random, randint
-from seqtools import collate, concatenate, batch, split
+from seqtools import collate, concatenate, batch, unbatch, split
 import pytest
 
 
@@ -36,17 +36,23 @@ def test_concatenate():
     assert arrs1 == arrs2
 
 
-def test_blockview():
+def test_batching():
     arr = list(range(137))
 
     chunked = list(batch(arr, 5, True))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)]
     assert chunked == expected
 
+    unchunked = list(unbatch(chunked, 5, 0))
+    assert unchunked == [x for b in expected for x in b]
+
     chunked = list(batch(arr, 5, False))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
         + [[135, 136]]
     assert chunked == expected
+
+    unchunked = [i for i in unbatch(chunked, 5, len(arr) % 5)]
+    assert unchunked == [x for b in expected for x in b]
 
     chunked = list(batch(arr, 5, pad=0, collate_fn=list))
     expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
