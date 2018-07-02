@@ -14,8 +14,8 @@ class Collation(Sequence):
     def __init__(self, sequences):
         self.sequences = sequences
 
-        if not all([len(s) == len(self.sequences[0])
-                    for s in self.sequences]):
+        if not all([len(seq) == len(self.sequences[0])
+                    for seq in self.sequences]):
             raise ValueError("all sequences should have the same length")
 
     def __len__(self):
@@ -23,12 +23,12 @@ class Collation(Sequence):
 
     @basic_getitem
     def __getitem__(self, item):
-        return tuple([s[item] for s in self.sequences])
+        return tuple([seq[item] for seq in self.sequences])
 
     @basic_setitem
     def __setitem__(self, key, value):
-        for s, v in zip(self.sequences, value):
-            s[key] = v
+        for seq, val in zip(self.sequences, value):
+            seq[key] = val
 
     def __iter__(self):
         return zip(*self.sequences)
@@ -58,14 +58,15 @@ def collate(sequences):
 class Concatenation(Sequence):
     def __init__(self, sequences):
         self.sequences = []
-        for s in sequences:
-            if isinstance(s, Concatenation):
-                for ss in s.sequences:
-                    self.sequences.append(ss)
+        for seq in sequences:
+            if isinstance(seq, Concatenation):
+                for subseq in seq.sequences:
+                    self.sequences.append(subseq)
             else:
-                self.sequences.append(s)
+                self.sequences.append(seq)
 
-        self.offsets = array.array('L', [0] + [len(s) for s in self.sequences])
+        self.offsets = array.array(
+            'L', [0] + [len(seq) for seq in self.sequences])
         for i in range(1, len(self.sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
@@ -74,13 +75,17 @@ class Concatenation(Sequence):
 
     @basic_getitem
     def __getitem__(self, key):
-        s = bisect.bisect(self.offsets, key) - 1
-        return self.sequences[s][key - self.offsets[s]]
+        target_seq = bisect.bisect(self.offsets, key) - 1
+        seq = self.sequences[target_seq]
+        offset = self.offsets[target_seq]
+        return seq[key - offset]
 
     @basic_setitem
     def __setitem__(self, key, value):
-        s = bisect.bisect(self.offsets, key) - 1
-        self.sequences[s][key - self.offsets[s]] = value
+        target_seq = bisect.bisect(self.offsets, key) - 1
+        seq = self.sequences[target_seq]
+        offset = self.offsets[target_seq]
+        seq[key - offset] = value
 
     def __iter__(self):
         return itertools.chain(*self.sequences)
@@ -98,9 +103,10 @@ def concatenate(sequences):
 
 
 class BatchView(Sequence):
-    def __init__(self, sequence, k, drop_last=False, pad=None, collate_fn=None):
+    def __init__(self, sequence, batch_size,
+                 drop_last=False, pad=None, collate_fn=None):
         self.sequence = sequence
-        self.k = k
+        self.batch_size = batch_size
         self.drop_last = drop_last
         self.pad = pad
         self.collate_fn = collate_fn
@@ -109,17 +115,18 @@ class BatchView(Sequence):
             warning("pad value is ignored because drop_last is true")
 
     def __len__(self):
-        if len(self.sequence) % self.k > 0 and not self.drop_last:
-            return len(self.sequence) // self.k + 1
+        if len(self.sequence) % self.batch_size > 0 and not self.drop_last:
+            return len(self.sequence) // self.batch_size + 1
         else:
-            return len(self.sequence) // self.k
+            return len(self.sequence) // self.batch_size
 
     @basic_getitem
     def __getitem__(self, key):
-        result = self.sequence[key * self.k:(key + 1) * self.k]
+        result = self.sequence[
+            key * self.batch_size:(key + 1) * self.batch_size]
 
-        if key == len(self.sequence) // self.k and self.pad is not None:
-            pad_size = (self.k - len(self.sequence) % self.k)
+        if key == (len(self) - 1) and self.pad is not None:
+            pad_size = self.batch_size - len(self.sequence) % self.batch_size
             result = concatenate((result, [self.pad] * pad_size))
 
         if self.collate_fn is not None:
@@ -129,22 +136,22 @@ class BatchView(Sequence):
 
     @basic_setitem
     def __setitem__(self, key, value):
-        start = key * self.k
-        if key == len(self.sequence) // self.k:
-            stop = start + len(self.sequence) % self.k
-            expected_value_size = len(self.sequence) % self.k \
-                if self.pad is not None else self.k
+        start = key * self.batch_size
+        if key == len(self.sequence) // self.batch_size:
+            stop = start + len(self.sequence) % self.batch_size
+            expected_value_size = len(self.sequence) % self.batch_size \
+                if self.pad is not None else self.batch_size
 
         else:
-            stop = (key + 1) * self.k
-            expected_value_size = self.k
+            stop = (key + 1) * self.batch_size
+            expected_value_size = self.batch_size
 
         if len(value) != expected_value_size:
             raise ValueError(self.__class__.__name__ + " only support "
                              "one-to-one assignment")
 
-        for i, v in zip(range(start, stop), value):
-            self.sequence[i] = v
+        for i, val in zip(range(start, stop), value):
+            self.sequence[i] = val
 
 
 def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
@@ -190,13 +197,10 @@ class Unbatching:
 
     @basic_getitem
     def __getitem__(self, key):
-        b, i = key // self.batch_size, key % self.batch_size
-        return self.sequence[b][i]
+        return self.sequence[key // self.batch_size][key % self.batch_size]
 
     def __iter__(self):
-        for b in self.sequence:
-            for v in b:
-                yield v
+        return itertools.chain.from_iterable(self.sequence)
 
 
 def unbatch(sequence, batch_size, last_batch_size=None):
@@ -220,34 +224,34 @@ def unbatch(sequence, batch_size, last_batch_size=None):
 
 class Split(Sequence):
     def __init__(self, sequence, edges):
-        n = len(sequence)
+        size = len(sequence)
 
         if isint(edges):
-            if n / (edges + 1) % 1 != 0:
+            if size / (edges + 1) % 1 != 0:
                 raise ValueError("edges must divide the size of the sequence")
-            step = n // (edges + 1)
-            self.starts = array.array('L', range(0, n, step))
-            self.stops = array.array('L', range(step, n + 1, step))
+            step = size // (edges + 1)
+            self.starts = array.array('L', range(0, size, step))
+            self.stops = array.array('L', range(step, size + 1, step))
 
         elif isint(edges[0]):
             self.starts = array.array('L')
             self.stops = array.array('L')
-            for e in edges:
+            for edge in edges:
                 start = self.stops[-1] if len(self.stops) > 0 else 0
-                stop = e
+                stop = edge
 
-                self.starts.append(clip(start, 0, n - 1))
-                self.stops.append(clip(stop, 0, n))
+                self.starts.append(clip(start, 0, size - 1))
+                self.stops.append(clip(stop, 0, size))
 
             self.starts.append(self.stops[-1])
-            self.stops.append(n)
+            self.stops.append(size)
 
         else:
             self.starts = array.array('L')
             self.stops = array.array('L')
             for start, stop in edges:
-                self.starts.append(clip(start, 0, n - 1))
-                self.stops.append(clip(stop, 0, n))
+                self.starts.append(clip(start, 0, size - 1))
+                self.stops.append(clip(stop, 0, size))
 
         self.sequence = sequence
 
@@ -286,5 +290,8 @@ def split(sequence, edges):
               the sequence.
             - An sequence of int tuples specifies the limits of
               subsequences.
+
+    Returns:
+        Sequence: A sequence of subsequences split accordingly.
     """
     return Split(sequence, edges)

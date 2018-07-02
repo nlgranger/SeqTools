@@ -66,7 +66,7 @@ def add_cache(arr, cache_size=1, cache=None):
             use as cache. Defaults to a standard :class:`python:dict`.
 
     Returns:
-        The sequence wrapped with a cache.
+        (Sequence): The sequence wrapped with a cache.
     """
     return CachedSequence(arr, cache_size, cache)
 
@@ -79,9 +79,9 @@ class PrefetchException(RuntimeError):
 
 class JobStatus(IntEnum):
     """A status descriptor for evaluated jobs."""
-    QUEUED = 1,
-    DONE = 2,
-    FAILED = 3,
+    QUEUED = 1
+    DONE = 2
+    FAILED = 3
 
 
 class AsyncSequence(Sequence):
@@ -115,7 +115,7 @@ class AsyncSequence(Sequence):
     - :meth:`__len__`
     - :meth:`start_workers`
     - :meth:`read_cache`
-    - :meth:`reraise_failed_job`
+    - :meth:`reraise_failed_job` (optional but recommended)
 
     Args:
         max_cached (int):
@@ -184,7 +184,7 @@ class AsyncSequence(Sequence):
 
     def read_cache(self, slot):
         """Returns specified slot from the local cache."""
-        raise NotImplemented
+        raise NotImplementedError
 
     def reraise_failed_job(self, slot):
         """Raises encountered error or generic exception corresponding
@@ -240,12 +240,12 @@ class AsyncSequence(Sequence):
 
         # handle errors
         if self.status[self.next_read_slot] == JobStatus.FAILED:
-            e = PrefetchException(
+            error = PrefetchException(
                 "failed to get item {}".format(self.todo[self.next_read_slot]))
             try:
                 self.reraise_failed_job(self.next_read_slot)
-            except Exception as e_reason:
-                raise_from(e, e_reason)
+            except Exception as original_error:
+                raise_from(error, original_error)
 
         # return buffer slot
         else:
@@ -282,23 +282,23 @@ class ThreadedSequence(AsyncSequence):
         return len(self.sequence)
 
     def start_workers(self):
-        for i, w in enumerate(self.workers):
-            if w is None or not w.is_alive():
-                w = threading.Thread(
+        for i, worker in enumerate(self.workers):
+            if not worker.is_alive():
+                worker = threading.Thread(
                     target=self.__class__.target,
                     args=(self.sequence, self.values_cache, self.errors_cache,
                           self.q_in, self.q_out,
                           self.timeout, self.start_hook))
-                w.start()
-                self.workers[i] = w
+                worker.start()
+                self.workers[i] = worker
 
     def read_cache(self, slot):
         return self.values_cache[slot]
 
     def reraise_failed_job(self, slot):
-        ev, tb = self.errors_cache[slot]
+        error, trace = self.errors_cache[slot]
         self.errors_cache[slot] = (None, "")
-        raise_with_traceback(ev, tb)
+        raise_with_traceback(error, trace)
 
     @staticmethod
     def target(sequence, values_cache, errors_cache, q_in, q_out,
@@ -310,19 +310,16 @@ class ThreadedSequence(AsyncSequence):
             try:
                 item, slot = q_in.get(timeout=timeout)
             except queue.Empty:
-                return
+                return  # idling, go to sleep
             if slot < 0:
-                return
+                return  # termination signal received
 
-            # noinspection PyBroadException
             try:
                 values_cache[slot] = sequence[item]
-
-            except Exception:
-                _, ev, tb = sys.exc_info()
-                errors_cache[slot] = (ev, tb)
+            except Exception as error:
+                _, _, trace = sys.exc_info()
+                errors_cache[slot] = (error, trace)
                 q_out.put_nowait((item, slot, JobStatus.FAILED))
-
             else:
                 q_out.put_nowait((item, slot, JobStatus.DONE))
 
@@ -339,8 +336,8 @@ class ThreadedSequence(AsyncSequence):
         for _ in obj.workers:
             obj.q_in.put((0, -1))
 
-        for w in obj.workers:
-            w.join()
+        for worker in obj.workers:
+            worker.join()
 
 
 class MultiprocessSequence(AsyncSequence):
@@ -360,9 +357,9 @@ class MultiprocessSequence(AsyncSequence):
         self.sequence = sequence
         self.workers = [] * nworkers
         for _ in range(nworkers):  # fill with placeholder workers
-            w = multiprocessing.Process()
-            w.start()
-            self.workers.append(w)
+            worker = multiprocessing.Process()
+            worker.start()
+            self.workers.append(worker)
 
         manager = multiprocessing.Manager()
         self.values_cache = manager.list([None] * max_cached)
@@ -379,27 +376,27 @@ class MultiprocessSequence(AsyncSequence):
         return len(self.sequence)
 
     def start_workers(self):
-        for i, w in enumerate(self.workers):
-            if not w.is_alive():
-                w.join()
-                w = multiprocessing.Process(
+        for i, worker in enumerate(self.workers):
+            if not worker.is_alive():
+                worker.join()
+                worker = multiprocessing.Process(
                     target=self.__class__.target,
                     args=(self.sequence, self.values_cache, self.errors_cache,
                           self.q_in, self.q_out,
                           self.timeout, self.start_hook))
-                w.start()
-                self.workers[i] = w
+                worker.start()
+                self.workers[i] = worker
 
     def read_cache(self, slot):
         return self.values_cache[slot]
 
     def reraise_failed_job(self, slot):
-        ev, tb = self.errors_cache[slot]
+        error, trace = self.errors_cache[slot]
         self.errors_cache[slot] = (None, "")
-        if ev is not None:
-            raise_with_traceback(ev, tb.as_traceback())
+        if error is not None:
+            raise_with_traceback(error, trace.as_traceback())
         else:
-            raise RuntimeError(tb)
+            raise RuntimeError(trace)
 
     @staticmethod
     def target(sequence, values_cache, errors_cache, q_in, q_out,
@@ -416,17 +413,15 @@ class MultiprocessSequence(AsyncSequence):
                 if slot < 0:
                     return
 
-                # noinspection PyBroadException
                 try:
                     values_cache[slot] = sequence[item]
-
-                except Exception:
-                    _, ev, tb = sys.exc_info()
-                    tb = tblib.Traceback(tb)
+                except Exception as error:
+                    _, _, trace = sys.exc_info()
+                    trace = tblib.Traceback(trace)
                     tb_str = traceback.format_exc(20)
                     # noinspection PyBroadException
                     try:  # this one may fail if ev is not picklable
-                        errors_cache[slot] = ev, tb
+                        errors_cache[slot] = error, trace
                     except Exception:
                         errors_cache[slot] = None, tb_str
 
@@ -451,8 +446,8 @@ class MultiprocessSequence(AsyncSequence):
         for _ in obj.workers:
             obj.q_in.put((0, -1))
 
-        for w in obj.workers:
-            w.join()
+        for worker in obj.workers:
+            worker.join()
 
 
 def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
@@ -493,12 +488,12 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
             An optional callable which takes an index and returns the
             index which is the most likely to be requested next.
 
-    Raises:
-        PrefetchException: raised when reading an item that threw an
-            exception during evaluation.
-
     Returns:
         Sequence: The wrapped sequence.
+
+    Note:
+        The wrapped sequence will raise :class:`PrefetchException` when
+        accessing an item that threw an exception during evaluation.
 
     See also:
 

@@ -42,11 +42,11 @@ class Debug:
 
     def __iter__(self):
         i = 0
-        it = iter(self.sequence)
+        seq_iter = iter(self.sequence)
 
         while True:
             try:
-                value = next(it)
+                value = next(seq_iter)
             except StopIteration:
                 return
 
@@ -73,6 +73,9 @@ def debug(sequence, func, max_calls=None, max_rate=None):
         max_rate (Optional[int]):
             An optional rate limit to avoid spamming `func`.
 
+    Returns:
+        (Sequence): The wrapped sequence.
+
     Example:
 
         .. testsetup::
@@ -97,11 +100,12 @@ class ThroughputMonitor:
         self.time_spent = 0
 
     def reset(self):
+        """Reset perf counter."""
         self.n_calls = 0
         self.time_spent = 0
 
     def throughput(self):
-        """ """
+        """Returns average measured throughput."""
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure throughput before any element was accessed")
@@ -109,7 +113,7 @@ class ThroughputMonitor:
         return self.n_calls / self.time_spent
 
     def read_delay(self):
-        """ """
+        """Return average measured time spent accessing items."""
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure read delay before any element was accessed")
@@ -133,32 +137,33 @@ class ThroughputMonitor:
         if key < 0:
             key = len(self) + key
 
-        t1 = perf_counter()
+        t_start = perf_counter()
         value = self.sequence[key]
-        t2 = perf_counter()
-        self.time_spent += t2 - t1
+        t_stop = perf_counter()
+        self.time_spent += t_stop - t_start
         self.n_calls += 1
         return value
 
     def __iter__(self):
-        it = iter(self.sequence)
+        seq_iter = iter(self.sequence)
 
-        t1 = perf_counter()
-        for value in it:
-            t2 = perf_counter()
-            self.time_spent += t2 - t1
+        t_start = perf_counter()
+        for value in seq_iter:
+            t_stop = perf_counter()
+            self.time_spent += t_stop - t_start
             self.n_calls += 1
 
             yield value
 
-            t1 = perf_counter()
+            t_start = perf_counter()
 
 
 def monitor_throughput(sequence):
-    """Wraps a sequence and adds two methods:
+    """Wraps a sequence in an object with three additional methods:
 
     * `read_delay` the average time it takes to read an item.
     * `throughput` the invert of the above.
+    * `reset` resets the accumulated statistics.
 
     Raises:
         ValueError: raised when quiering statistics before any measure

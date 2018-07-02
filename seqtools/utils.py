@@ -2,8 +2,8 @@ import ctypes
 import struct
 import numbers
 from typing import Sequence
-import multiprocessing
 import queue
+import multiprocessing
 from multiprocessing.sharedctypes import RawArray, RawValue
 
 
@@ -15,15 +15,17 @@ def clip(x, a, b):
     return max(a, min(x, b))
 
 
-def basic_getitem(f):
-    """decorator for a sane defaults implementation of __getitem__ that calls
-    the actual implementation on integer keys in range 0 to len(self).
+def basic_getitem(func):
+    """Decorator that adds slicing support for a __getitem__.
 
     Args:
-      f: 
+        func (Callable[[MutableSequence, int], Any]):
+            A `__getitem__` method that only accepts positive integer
+            indices.
 
     Returns:
-
+        A `__getitem__` method that accepts negative indexing and
+        slicing.
     """
     def getitem(self, key):
         if isinstance(key, slice):
@@ -37,7 +39,7 @@ def basic_getitem(f):
             if key < 0:
                 key = len(self) + key
 
-            return f(self, key)
+            return func(self, key)
 
         else:
             raise TypeError(
@@ -47,7 +49,18 @@ def basic_getitem(f):
     return getitem
 
 
-def basic_setitem(f):
+def basic_setitem(func):
+    """Decorator that adds slicing support for a __setitem__.
+
+    Args:
+        func (Callable[[MutableSequence, int, Any]]):
+            A `__setitem__` method that only accepts positive integer
+            indices.
+
+    Returns:
+        A `__setitem__` method that accepts negative indexing and
+        slicing.
+    """
     def setitem(self, key, value):
         if isinstance(key, slice):
             slice_view = SeqSlice(self, key)
@@ -57,8 +70,8 @@ def basic_setitem(f):
                     self.__class__.__name__ +
                     " only supports one-to-one assignment")
 
-            for i, v in enumerate(value):
-                slice_view[i] = v
+            for i, val in enumerate(value):
+                slice_view[i] = val
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
@@ -68,7 +81,7 @@ def basic_setitem(f):
             if key < 0:
                 key = len(self) + key
 
-            f(self, key, value)
+            func(self, key, value)
 
         else:
             raise TypeError(
@@ -78,30 +91,19 @@ def basic_setitem(f):
     return setitem
 
 
-def normalize_slice(start, stop, step, n):
-    """Normalize slice boundaries so that an index can be easily computed by
-    `start` + i * step`
-    
-    Arguments
-    ---------
-    start: Union[int, None]
-        start index
-    stop: Union[int, None]
-        stop index
-    step: Union[int, None]
-        step size
-    n: int
-        size of the sliced sequence
+def normalize_slice(start, stop, step, size):
+    """Normalize slice parameters so that start and stop are positive
+    integers and the base index can be easily computed by
+    :code:`start + i * step`.
 
     Args:
-      start: 
-      stop: 
-      step: 
-      n: 
+        start (Optional[int]): start index
+        stop (Optional[int]): stop index
+        step (Optional[int]): step size
+        size (int): size of the sliced sequence
 
     Returns:
-
-    
+        (int, int, int): a triplet of integers start, stop, step with
     """
     if step is None:
         step = 1
@@ -109,25 +111,25 @@ def normalize_slice(start, stop, step, n):
         raise ValueError("slice step cannot be 0")
 
     if start is None:
-        start = 0 if step > 0 else n - 1
+        start = 0 if step > 0 else size - 1
     elif start >= 0:
-        start = min(start, n - 1)
+        start = min(start, size - 1)
     else:
-        start = max(0, n + start)
+        start = max(0, size + start)
 
     if stop is None:
-        stop = n if step > 0 else -1
+        stop = size if step > 0 else -1
     elif stop >= 0:
-        stop = min(stop, n)
+        stop = min(stop, size)
     else:
-        stop = max(-1, n + stop)
+        stop = max(-1, size + stop)
 
     if (stop - start) / step < 0:
         stop = start
 
-    n = abs(stop - start) - 1
-    s = abs(step)
-    numel = (n + s - (n % s)) // s
+    size = abs(stop - start) - 1
+    abs_step = abs(step)
+    numel = (size + abs_step - (size % abs_step)) // abs_step
     stop = start + numel * step
 
     return start, stop, step
@@ -192,14 +194,14 @@ class SharedCtypeQueue:
             buf = self.values[offset:offset + self.itemsize]
 
             try:
-                v = struct.unpack(self.fmt, buf)
+                value = struct.unpack(self.fmt, buf)
             except Exception:
                 raise
             finally:
                 # release buffer slot for writing
                 self.putsem.release()
 
-        return v
+        return value
 
     def get_nowait(self):
         return self.get(blocking=False)

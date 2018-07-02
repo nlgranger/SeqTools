@@ -29,8 +29,8 @@ class SerializableFunc:
             self.func = func.func
         else:
             self.name = func.__name__
-            with open(inspect.getsourcefile(func)) as f:
-                self.source = f.read()
+            with open(inspect.getsourcefile(func)) as dump_file:
+                self.source = dump_file.read()
             self.func = func
             functools.update_wrapper(self, func)
 
@@ -43,16 +43,16 @@ class SerializableFunc:
     def __setstate__(self, state):
         self.source, self.name = state
 
-        d = tempfile.mkdtemp()
+        tmpdir = tempfile.mkdtemp()
         try:
-            with open(os.path.join(d, "module.py"), 'w') as f:
-                f.write(self.source)
+            with open(os.path.join(tmpdir, "module.py"), 'w') as dump_file:
+                dump_file.write(self.source)
 
-            sys.path.insert(0, d)
-            m = import_module("module")
-            m = reload(m)
-            self.func = getattr(m, self.name)
+            sys.path.insert(0, tmpdir)
+            module = import_module("module")
+            module = reload(module)
+            self.func = getattr(module, self.name)
             sys.path.pop(0)
 
         finally:
-            shutil.rmtree(d)
+            shutil.rmtree(tmpdir)

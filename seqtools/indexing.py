@@ -3,9 +3,9 @@ from numbers import Integral
 import itertools
 import bisect
 from array import array
+import logging
 from future.builtins import range
 
-import logging
 from .utils import isint, basic_getitem, basic_setitem, normalize_slice
 
 
@@ -21,9 +21,9 @@ class Range(Sequence):
         if (stop - start) / step < 0:
             stop = start
 
-        n = abs(stop - start) - 1
-        s = abs(step)
-        numel = (n + s - (n % s)) // s
+        size = abs(stop - start) - 1
+        abs_step = abs(step)
+        numel = (size + abs_step - (size % abs_step)) // abs_step
         stop = start + step * numel
 
         self.start, self.stop, self.step = start, stop, step
@@ -100,8 +100,8 @@ class Reindexing(Sequence):
                 raise ValueError(self.__class__.__name__ + " only support "
                                  "one-to-one assignment")
 
-            for i, v in zip(indexes, value):
-                self.sequence[i] = v
+            for i, val in zip(indexes, value):
+                self.sequence[i] = val
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
@@ -153,7 +153,7 @@ class Cycle(Sequence):
 
     @basic_getitem
     def __getitem__(self, key):
-            return self.sequence[key % len(self.sequence)]
+        return self.sequence[key % len(self.sequence)]
 
     @basic_setitem
     def __setitem__(self, key, value):
@@ -212,10 +212,7 @@ def cycle(sequence, limit=None):
        :width: 10%
        :align: center
     """
-    if limit is None:
-        return InfiniteCycle(sequence)
-    else:
-        return Cycle(sequence, limit)
+    return InfiniteCycle(sequence) if limit is None else Cycle(sequence, limit)
 
 
 class Interleaving(Sequence):
@@ -260,7 +257,7 @@ class Interleaving(Sequence):
         self.sequences[seq][idx] = value
 
     def __iter__(self):
-        iterators = [iter(s) for s in self.sequences]
+        iterators = [iter(seq) for seq in self.sequences]
         i = -1
         while len(iterators) > 0:
             i = (i + 1) % len(iterators)

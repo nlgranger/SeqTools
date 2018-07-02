@@ -27,9 +27,9 @@ class Mapping(Sequence):
         try:
             return self.f(*(l[item] for l in self.sequences))
 
-        except Exception as e:
+        except Exception as error:
             if self.debug_msg is not None:
-                raise_from(e, MappingException(self.debug_msg))
+                raise_from(error, MappingException(self.debug_msg))
             else:
                 raise
 
@@ -38,9 +38,9 @@ class Mapping(Sequence):
             try:
                 yield self.f(*args)
 
-            except Exception as e:
+            except Exception as error:
                 if self.debug_msg is not None:
-                    raise_from(e, MappingException(self.debug_msg))
+                    raise_from(error, MappingException(self.debug_msg))
                 else:
                     raise
 
