@@ -7,17 +7,28 @@ import array
 import multiprocessing
 import multiprocessing.sharedctypes
 import threading
+import signal
 from collections import OrderedDict
 import traceback
 import queue
 import logging
 from enum import IntEnum
 from typing import Sequence
+from numbers import Integral
 import tblib
 
 from future.utils import raise_from, raise_with_traceback
 
 from .utils import basic_getitem, basic_setitem, SharedCtypeQueue
+
+try:  # Python 2.7+
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
+
+logging.getLogger(__name__).addHandler(NullHandler())
 
 
 # -----------------------------------------------------------------------------
@@ -84,8 +95,8 @@ class JobStatus(IntEnum):
     FAILED = 3
 
 
-class AsyncSequence(Sequence):
-    """Abstract class to facilitate asynchronous sequence evaluation.
+class AsyncSequenceManager(Sequence):
+    """A sequence like object that wraps AsyncSequence instances.
 
     This class implements some generic logic to manage a sequence where
     elements are read asynchronously and out of order.
@@ -108,349 +119,219 @@ class AsyncSequence(Sequence):
       delay.
 
     Note that the order in which jobs completed is not important.
-
-    The following methods must be overriden to provide a working
-    implementation:
-
-    - :meth:`__len__`
-    - :meth:`start_workers`
-    - :meth:`read_cache`
-    - :meth:`reraise_failed_job` (optional but recommended)
-
-    Args:
-        max_cached (int):
-            Size of the cache, must be smaller than the sequence itself.
-            At any given time, no more than `max_cached` jobs will be
-            queued.
-        q_in:
-            Job submission queue, see above description.
-        q_out:
-            Job completion queue, see above description.
-        timeout (int):
-            When waiting for a job completion, timeout specified how
-            long the program should wait before attempting to restart
-            possibly terminated threads with
-            :func:`AsyncSequence.start_workers` (default 1).
-        anticipate (Optional[Callable[[int], int]]):
-            An optional callable which takes an index and returns the
-            index which is the most likely to be requested next.
     """
-    def __init__(self, max_cached, q_in, q_out, timeout=1, anticipate=None):
-        self.q_in = q_in
-        self.q_out = q_out
-        self.timeout = timeout
-        self.max_cached = max_cached
-        if self.max_cached < 1:
+    def __init__(self, async_seq, max_cached, timeout=1, anticipate=None):
+        if max_cached < 1:
             raise ValueError("cache must contain at least one slot.")
-        if anticipate is not None:
-            self.anticipate = anticipate
-        else:
-            self.anticipate = lambda s: s + 1
+
+        self.async_seq = async_seq
+        self.max_cached = max_cached
+        self.timeout = timeout
+        self.anticipate = anticipate or (lambda s: s + 1)
 
         # Sorting logic
-        self.todo = array.array('l', [0])
-        for i in range(1, self.max_cached):
-            self.todo.append(self.anticipate(self.todo[-1]))
-        self.status = array.array('b', [JobStatus.QUEUED] * self.max_cached)
-        self.next_read_slot = 0  # slot containing the expected next read
-        self.todo_next = self.anticipate(self.todo[-1])
+        self.todo = array.array('l', [0] * max_cached)
+        self.status = array.array('b', [JobStatus.DONE] * max_cached)
+        self.first_slot = 0
 
         # Setup initial jobs
-        for i in range(0, self.max_cached):
+        self._start_job(0)
+        for i in range(1, max_cached - 1):
+            self.todo[i] = self.anticipate(self.todo[i - 1])
             self._start_job(i)
 
     def __len__(self):
-        raise NotImplementedError
+        return len(self.async_seq)
 
-    def __getitem__(self, key):
+    def __getitem__(self, item):
         # TODO: manage slices
-        # if not isinstance(key, Integral):
-        #     raise TypeError(
-        #         self.__class__.__name__ + " indices must be integers or "
-        #         "slices, not " + key.__class__.__name__)
+        if not isinstance(item, Integral):
+            raise TypeError(
+                self.__class__.__name__ + " indices must be integers or "
+                "slices, not " + item.__class__.__name__)
 
-        if key < -len(self) or key >= len(self):
+        if item < -len(self) or item >= len(self):
             raise IndexError(
                 self.__class__.__name__ + " index out of range")
 
-        if key < 0:
-            key = len(self) + key
-
-        return self.read_cache(self._prepare(key))
-
-    def start_workers(self):
-        """Starts workers or restarts them if they timed-out or died."""
-        raise NotImplementedError
-
-    def read_cache(self, slot):
-        """Returns specified slot from the local cache."""
-        raise NotImplementedError
-
-    def reraise_failed_job(self, slot):
-        """Raises encountered error or generic exception corresponding
-        to the specified failed job slot.
-        """
-        raise RuntimeError("No information available")
-
-    def _start_job(self, slot):
-        self.q_in.put_nowait((self.todo[slot], slot))
-        self.status[slot] = JobStatus.QUEUED
-
-    def _join(self):
-        while True:
-            try:
-                return self.q_out.get(timeout=self.timeout)
-
-            except queue.Empty:
-                self.start_workers()
-
-    def _prepare(self, item):
-        # Compute specified item and return its buffer slot.
-
-        # reassign previously returned slot if any
-        if self.status[self.next_read_slot] != JobStatus.QUEUED:
-            self.todo[self.next_read_slot] = self.todo_next
-            self._start_job(self.next_read_slot)
-
-            self.todo_next = self.anticipate(self.todo_next)
-            self.next_read_slot = (self.next_read_slot + 1) % self.max_cached
+        if item < 0:
+            item = len(self) + item
 
         # unexpected request
-        if item != self.todo[self.next_read_slot]:
+        if item != self.todo[self.first_slot]:
             # reassign targets
+            self.first_slot = 0
             self.todo[0] = item
             for i in range(1, self.max_cached):
                 self.todo[i] = self.anticipate(self.todo[i - 1])
-
-            # restart jobs
-            for i in range(self.max_cached):
+            for i in range(0, self.max_cached):
                 if self.status[i] != JobStatus.QUEUED:
                     self._start_job(i)
-
-            self.todo_next = self.anticipate(self.todo[self.max_cached - 1])
-            self.next_read_slot = 0
+        else:
+            last_slot = (self.first_slot - 1) % self.max_cached
+            todo = self.anticipate(self.todo[(last_slot - 1) % self.max_cached])
+            self.todo[last_slot] = todo
+            if self.status[last_slot] == JobStatus.QUEUED:
+                raise AssertionError
+            self._start_job(last_slot)
 
         # fetch results until we have the requested one
-        while not self.status[self.next_read_slot] != JobStatus.QUEUED:
-            idx, slot, status = self._join()
-            if idx != self.todo[slot]:  # slot reassigned
+        while self.status[self.first_slot] == JobStatus.QUEUED:
+            idx, slot, status = self.async_seq.next_completion()
+            if idx != self.todo[slot]:  # slot was reassigned
                 self._start_job(slot)
+                continue
             else:
                 self.status[slot] = status
 
         # handle errors
-        if self.status[self.next_read_slot] == JobStatus.FAILED:
+        if self.status[self.first_slot] == JobStatus.FAILED:
             error = PrefetchException(
-                "failed to get item {}".format(self.todo[self.next_read_slot]))
+                "failed to get item {}".format(self.todo[self.first_slot]))
             try:
-                self.reraise_failed_job(self.next_read_slot)
+                self.async_seq.reraise_failed_job(self.first_slot)
             except Exception as original_error:
                 raise_from(error, original_error)
+            finally:
+                self.first_slot = (self.first_slot + 1) % self.max_cached
 
-        # return buffer slot
-        else:
-            return self.next_read_slot
+        else:  # or return buffer slot
+            out = self.async_seq.read(self.first_slot)
+            self.first_slot = (self.first_slot + 1) % self.max_cached
+            return out
+
+    def _start_job(self, slot):
+        self.async_seq.enqueue(self.todo[slot], slot)
+        self.status[slot] = JobStatus.QUEUED
 
 
-class ThreadedSequence(AsyncSequence):
-    def __init__(self, sequence, max_cached,
-                 nworkers=0, timeout=1, start_hook=None, anticipate=None):
+class AsyncSequence:
+    def __init__(self, sequence, job_queue, done_queue,
+                 values_cache, errors_cache,
+                 worker_t, nworkers=0, timeout=1, start_hook=None):
+        if nworkers < 1:
+            nworkers += multiprocessing.cpu_count()
         if nworkers <= 0:
-            nworkers = max(1, multiprocessing.cpu_count() - nworkers)
+            raise ValueError("need at least one worker")
 
-        max_cached = min(max_cached, len(sequence))
-
-        q_in = queue.Queue(maxsize=max_cached)
-        q_out = queue.Queue(maxsize=max_cached)
-
-        super(ThreadedSequence, self).__init__(
-            max_cached, q_in, q_out, timeout, anticipate)
-
+        self.timeout = timeout
         self.sequence = sequence
-        self.workers = [threading.Thread()] * nworkers
-        self.values_cache = [None] * max_cached
-        self.errors_cache = [(None, "")] * max_cached
         self.start_hook = start_hook
+        self.job_queue = job_queue
+        self.done_queue = done_queue
 
-        # start working
-        self.start_workers()
+        # buffers
+        self.values_cache = values_cache
+        self.errors_cache = errors_cache
 
-        # ensure proper termination in any situation
-        finalize(self, ThreadedSequence._finalize, self)
+        # workers
+        self.worker_t = worker_t
+        self.workers = [None] * nworkers
+        for i in range(nworkers):
+            self._start_worker(i)
+
+        # ensure clean termination in any situation
+        finalize(self, AsyncSequence._finalize, self)
+
+    @staticmethod
+    def _finalize(obj):
+        while True:  # clear job submission queue
+            try:
+                obj.job_queue.get(timeout=0.05)
+            except queue.Empty:
+                break
+
+        for _ in obj.workers:
+            obj.job_queue.put((0, -1))
+
+        for w in obj.workers:
+            w.join()
+
+    def _start_worker(self, i):
+        if self.workers[i] is not None:
+            self.workers[i].join()
+        self.workers[i] = self.worker_t(
+            target=self._target,
+            args=(i, self.sequence, self.values_cache, self.errors_cache,
+                  self.job_queue, self.done_queue,
+                  self.timeout, self.start_hook))
+        old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        self.workers[i].start()
+        signal.signal(signal.SIGINT, old_sig_hdl)
 
     def __len__(self):
         return len(self.sequence)
 
-    def start_workers(self):
-        for i, worker in enumerate(self.workers):
-            if not worker.is_alive():
-                worker = threading.Thread(
-                    target=self.__class__.target,
-                    args=(self.sequence, self.values_cache, self.errors_cache,
-                          self.q_in, self.q_out,
-                          self.timeout, self.start_hook))
-                worker.start()
-                self.workers[i] = worker
+    def enqueue(self, item, slot):
+        self.job_queue.put((item, slot), timeout=1)
 
-    def read_cache(self, slot):
+    def next_completion(self):
+        idx, slot, status = self.done_queue.get()
+        while slot < 0:
+            self._start_worker(-slot - 1)
+            idx, slot, status = self.done_queue.get()
+        return idx, slot, status
+
+    def read(self, slot):
         return self.values_cache[slot]
 
     def reraise_failed_job(self, slot):
-        error, trace = self.errors_cache[slot]
+        ev, tb = self.errors_cache[slot]
         self.errors_cache[slot] = (None, "")
-        raise_with_traceback(error, trace)
+        if ev is not None:
+            raise_with_traceback(ev, tb.as_traceback())
+        else:
+            raise RuntimeError
 
     @staticmethod
-    def target(sequence, values_cache, errors_cache, q_in, q_out,
-               timeout, start_hook):
+    def _target(pid, sequence, values_buf, errors_buf, job_queue, done_queue,
+                timeout, start_hook):
+        logger = logging.getLogger(__name__)
+
         if start_hook is not None:
             start_hook()
 
         while True:
-            try:
-                item, slot = q_in.get(timeout=timeout)
-            except queue.Empty:
-                return  # idling, go to sleep
-            if slot < 0:
-                return  # termination signal received
+            try:  # acquire job
+                idx, slot = job_queue.get(timeout=timeout)
 
-            try:
-                values_cache[slot] = sequence[item]
-            except Exception as error:
-                _, _, trace = sys.exc_info()
-                errors_cache[slot] = (error, trace)
-                q_out.put_nowait((item, slot, JobStatus.FAILED))
-            else:
-                q_out.put_nowait((item, slot, JobStatus.DONE))
-
-    @staticmethod
-    def _finalize(obj):
-        # drain input queue
-        while not obj.q_in.empty():
-            try:
-                obj.q_in.get_nowait()
-            except queue.Empty:
-                pass
-
-        # send termination signals
-        for _ in obj.workers:
-            obj.q_in.put((0, -1))
-
-        for worker in obj.workers:
-            worker.join()
-
-
-class MultiprocessSequence(AsyncSequence):
-    def __init__(self, sequence, max_cached,
-                 nworkers=0, timeout=1, start_hook=None, anticipate=None):
-        if nworkers <= 0:
-            nworkers = max(1, multiprocessing.cpu_count() - nworkers)
-
-        max_cached = min(max_cached, len(sequence))
-
-        q_in = SharedCtypeQueue("Ll", maxsize=max_cached)
-        q_out = SharedCtypeQueue("LLb", maxsize=max_cached)
-
-        super(MultiprocessSequence, self).__init__(
-            max_cached, q_in, q_out, timeout, anticipate)
-
-        self.sequence = sequence
-        self.workers = [] * nworkers
-        for _ in range(nworkers):  # fill with placeholder workers
-            worker = multiprocessing.Process()
-            worker.start()
-            self.workers.append(worker)
-
-        manager = multiprocessing.Manager()
-        self.values_cache = manager.list([None] * max_cached)
-        self.errors_cache = manager.list([None, ""] * max_cached)
-        self.start_hook = start_hook
-
-        # ensure proper termination in any situation
-        finalize(self, MultiprocessSequence._finalize, self)
-
-        # start workers
-        self.start_workers()
-
-    def __len__(self):
-        return len(self.sequence)
-
-    def start_workers(self):
-        for i, worker in enumerate(self.workers):
-            if not worker.is_alive():
-                worker.join()
-                worker = multiprocessing.Process(
-                    target=self.__class__.target,
-                    args=(self.sequence, self.values_cache, self.errors_cache,
-                          self.q_in, self.q_out,
-                          self.timeout, self.start_hook))
-                worker.start()
-                self.workers[i] = worker
-
-    def read_cache(self, slot):
-        return self.values_cache[slot]
-
-    def reraise_failed_job(self, slot):
-        error, trace = self.errors_cache[slot]
-        self.errors_cache[slot] = (None, "")
-        if error is not None:
-            raise_with_traceback(error, trace.as_traceback())
-        else:
-            raise RuntimeError(trace)
-
-    @staticmethod
-    def target(sequence, values_cache, errors_cache, q_in, q_out,
-               timeout, start_hook):
-        if start_hook is not None:
-            start_hook()
-
-        try:
-            while True:
-                try:
-                    item, slot = q_in.get(timeout=timeout)
-                except queue.Empty:
-                    return
-                if slot < 0:
+            except queue.Empty:  # or go to sleep
+                try:  # notify parent
+                    done_queue.put((0, -pid - 1, 0))
+                finally:
+                    logger.debug("worker {}: timeout, exiting".format(pid))
                     return
 
-                try:
-                    values_cache[slot] = sequence[item]
-                except Exception as error:
-                    _, _, trace = sys.exc_info()
-                    trace = tblib.Traceback(trace)
-                    tb_str = traceback.format_exc(20)
-                    # noinspection PyBroadException
-                    try:  # this one may fail if ev is not picklable
-                        errors_cache[slot] = error, trace
-                    except Exception:
-                        errors_cache[slot] = None, tb_str
+            except Exception:  # parent probably died
+                logger.debug("worker {}: parent died, exiting".format(pid))
+                return
 
-                    q_out.put_nowait((item, slot, JobStatus.FAILED))
+            if slot < 0:  # or terminate
+                logger.debug("worker {}: exiting".format(pid))
+                return
 
-                else:
-                    q_out.put_nowait((item, slot, JobStatus.DONE))
-
-        except IOError:
-            return  # parent probably died
-
-    @staticmethod
-    def _finalize(obj):
-        # drain input queue
-        while not obj.q_in.empty():
             try:
-                obj.q_in.get_nowait()
-            except queue.Empty:
-                pass
+                values_buf[slot] = sequence[idx]
+                job_status = JobStatus.DONE
 
-        # send termination signals
-        for _ in obj.workers:
-            obj.q_in.put((0, -1))
+            except Exception:  # save error informations if any
+                et, ev, tb = sys.exc_info()
+                try:
+                    errors_buf[slot] = ev, tblib.Traceback(tb)
+                except Exception:
+                    errors_buf[slot] = \
+                        None, traceback.format_exception(et, ev, tb)
+                job_status = JobStatus.FAILED
 
-        for worker in obj.workers:
-            worker.join()
+            try:  # notify about job termination
+                done_queue.put((idx, slot, job_status))
+            except Exception:  # parent process died unexpectedly
+                logger.debug("worker {}: parent died, exiting".format(pid))
+                return
 
 
-def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
+def prefetch(sequence, max_buffered=None,
+             nworkers=0, method='thread', timeout=1,
              start_hook=None, anticipate=None):
     """Starts multiple workers to prefetch sequence values before use.
 
@@ -462,7 +343,7 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
     Args:
         sequence (Sequence):
             The data source.
-        max_cached (Optional[int]):
+        max_buffered (Optional[int]):
             Optional limit on the number of prefetched values at any
             time (default None).
         nworkers (int):
@@ -471,14 +352,14 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
         method (str):
             Type of workers:
 
-            * `'thread'` uses `threading.Thread` which has low overhead
-              but allows only one active worker at a time, ideal for
-              IO-bound operations.
-            * `'process'` uses `multiprocessing.Process` which provides
-              full parallelism but adds communication overhead between
-              workers and the parent process.
+            * `'thread'` uses :class:`python:threading.Thread` which
+              has low overhead but allows only one active worker at a
+              time, ideal for IO-bound operations.
+            * `'process'` uses :class:`python:multiprocessing.Process`
+              which provides full parallelism but adds communication
+              overhead between workers and the parent process.
 
-            Defaults to 'thread'.
+            Defaults to `'thread'`.
         timeout (int):
             Maximum idling worker time in seconds, workers will be
             restarted automatically if needed (default 1).
@@ -491,24 +372,32 @@ def prefetch(sequence, max_cached=None, nworkers=0, method='thread', timeout=1,
     Returns:
         Sequence: The wrapped sequence.
 
-    Note:
-        The wrapped sequence will raise :class:`PrefetchException` when
-        accessing an item that threw an exception during evaluation.
-
-    See also:
-
-        * :class:`evaluation.AsyncSequence` is an abstract class that
-          can facilitate the implementation of custom workers for
-          prefetching.
+    Raises:
+        PrefetchError: on error while reading item from `sequence`
     """
     if method == "thread":
-        return ThreadedSequence(sequence,
-                                max_cached, nworkers, timeout,
-                                start_hook, anticipate)
-    elif method == "process" or method == "proc":
-        return MultiprocessSequence(sequence,
-                                    max_cached, nworkers, timeout,
-                                    start_hook, anticipate)
+        job_queue = queue.Queue(maxsize=max_buffered + nworkers)
+        done_queue = queue.Queue(maxsize=max_buffered + nworkers)
+        values_cache = [None] * max_buffered
+        errors_cache = [None] * max_buffered
+        worker_t = threading.Thread
+        async_seq = AsyncSequence(
+            sequence, job_queue, done_queue, values_cache, errors_cache,
+            worker_t, nworkers, timeout, start_hook)
+        return AsyncSequenceManager(
+            async_seq, max_buffered, timeout, anticipate)
+    elif method in ("process", "proc"):
+        job_queue = SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
+        done_queue = SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
+        manager = multiprocessing.Manager()
+        values_cache = manager.list([None] * max_buffered)
+        errors_cache = manager.list([None, ""] * max_buffered)
+        worker_t = multiprocessing.Process
+        async_seq = AsyncSequence(
+            sequence, job_queue, done_queue, values_cache, errors_cache,
+            worker_t, nworkers, timeout, start_hook)
+        return AsyncSequenceManager(
+            async_seq, max_buffered, timeout, anticipate)
     else:
         raise ValueError("unsupported method")
 

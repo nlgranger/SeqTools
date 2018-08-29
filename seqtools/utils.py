@@ -228,3 +228,6 @@ class SharedCtypeQueue:
 
     def empty(self):
         return self.stop.value == self.start.value
+
+    def task_done(self):
+        pass

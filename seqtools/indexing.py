@@ -55,8 +55,7 @@ class Range(Sequence):
 
 
 def arange(start, stop=None, step=None):
-    """Sequential equivalent of Python built-in
-    :class:`python:range`.
+    """Sequential equivalent of Python built-in :class:`python:range`.
     """
     return Range(start, stop, step)
 
@@ -271,14 +270,13 @@ class Interleaving(Sequence):
 def interleave(*sequences):
     """Interleaves elements from several sequences into one.
 
+    Sequences don't need to have the same length, the cycling will
+    operate between whatever sequences are left.
+
     .. image:: _static/interleaving.png
        :alt: interleaving
        :width: 30%
        :align: center
-
-    Note:
-       sequences don't need to have the same length, the cycling will
-       operate between whatever sequences are left.
 
     Example:
 

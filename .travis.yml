@@ -3,9 +3,10 @@ sudo: false
 cache: pip
 
 python:
-  - '2.7'
-  - '3.5'
-  - '3.6'
+  - "2.7"
+  - "3.5"
+  - "3.6"
+  #- "pypy3.5"  fails due to timing tests
 
 install:
   - pip install tox

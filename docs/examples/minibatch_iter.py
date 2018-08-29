@@ -35,14 +35,14 @@ print("sequential read took {:.1f}\"".format(t2 - t1))
 
 
 t1 = time.time()
-for batch in seqtools.prefetch(minibatches, max_cached=100, method="thread", nworkers=2):
+for batch in seqtools.prefetch(minibatches, max_buffered=100, method="thread", nworkers=2):
     pass
 t2 = time.time()
 print("threaded read took {:.1f}\"".format(t2 - t1))
 
 
 t1 = time.time()
-for batch in seqtools.prefetch(minibatches, max_cached=100, method="process", nworkers=2):
+for batch in seqtools.prefetch(minibatches, max_buffered=100, method="process", nworkers=2):
     pass
 t2 = time.time()
 print("multiprocessing read took {:.1f}\"".format(t2 - t1))

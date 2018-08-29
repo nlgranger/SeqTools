@@ -21,6 +21,7 @@ API Reference
    take
    interleave
    prefetch
+   load_buffers
    repeat
    smap
    split
@@ -56,6 +57,7 @@ Evaluation
 
 .. autofunction:: add_cache
 .. autofunction:: prefetch
+.. autofunction:: load_buffers
 .. autoclass:: SerializableFunc
 
 
