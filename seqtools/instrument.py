@@ -1,11 +1,15 @@
+"""Debugging tools."""
+
 try:
     from time import monotonic, perf_counter
 except ImportError:
-    from monotonic import monotonic, monotonic as perf_counter
+    from monotonic import monotonic
+    perf_counter = monotonic
+
 from .utils import isint, basic_getitem
 
 
-class Debug:
+class Debug(object):
     def __init__(self, sequence, func, max_calls, max_rate):
         self.sequence = sequence
         self.max_calls = max_calls
@@ -59,7 +63,8 @@ class Debug:
 
 
 def debug(sequence, func, max_calls=None, max_rate=None):
-    """Wraps a sequence to trigger a function on each read.
+    """
+    Wrap a sequence to trigger a function on each read.
 
     Args:
         sequence (Sequence):
@@ -93,19 +98,23 @@ def debug(sequence, func, max_calls=None, max_rate=None):
     return Debug(sequence, func, max_calls, max_rate)
 
 
-class ThroughputMonitor:
+class ThroughputMonitor(object):
     def __init__(self, sequence):
         self.sequence = sequence
         self.n_calls = 0
         self.time_spent = 0
 
     def reset(self):
-        """Reset perf counter."""
+        """
+        Reset perf counter.
+        """
         self.n_calls = 0
         self.time_spent = 0
 
     def throughput(self):
-        """Returns average measured throughput."""
+        """
+        Returns average measured throughput.
+        """
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure throughput before any element was accessed")
@@ -113,7 +122,9 @@ class ThroughputMonitor:
         return self.n_calls / self.time_spent
 
     def read_delay(self):
-        """Return average measured time spent accessing items."""
+        """
+        Return average measured time spent accessing items.
+        """
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure read delay before any element was accessed")
@@ -159,11 +170,12 @@ class ThroughputMonitor:
 
 
 def monitor_throughput(sequence):
-    """Wraps a sequence in an object with three additional methods:
+    """
+    Wrap a sequence in an object with three additional methods:
 
-    * `read_delay` the average time it takes to read an item.
-    * `throughput` the invert of the above.
-    * `reset` resets the accumulated statistics.
+    * :code:`read_delay` the average time it takes to read an item.
+    * :code:`throughput` the invert of the above.
+    * :code:`reset` resets the accumulated statistics.
 
     Raises:
         ValueError: raised when quiering statistics before any measure

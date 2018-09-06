@@ -9,7 +9,6 @@ SeqTools
    tutorial
    reference
    examples
-   internal
 
 
 .. testsetup::
@@ -113,10 +112,10 @@ The library comes with a set of helper functions to help manipulate sequences:
 .. _interleaving: reference.html#seqtools.interleave
 
 ==================== ================= ===============
-| |concatenate|      | |batch|         | |gather|
 | `concatenation`_   | `batching`_     | `reindexing`_
-| |prefetch|         | |interleaving|
+| |concatenate|      | |batch|         | |gather|
 | `prefetching`_     | `interleaving`_
+| |prefetch|         | |interleaving|
 ==================== ================= ===============
 
 ... and others (suggestions are also welcome).

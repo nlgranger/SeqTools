@@ -1,126 +1,56 @@
+"""Tools related to the evaluation of sequence items."""
+
 import sys
-try:
-    from weakref import finalize
-except ImportError:
-    from backports.weakref import finalize
 import array
 import multiprocessing
 import multiprocessing.sharedctypes
 import threading
 import signal
-from collections import OrderedDict
-import traceback
 import queue
-import logging
 from enum import IntEnum
-from typing import Sequence
-from numbers import Integral
-import tblib
-
-from future.utils import raise_from, raise_with_traceback
-
-from .utils import basic_getitem, basic_setitem, SharedCtypeQueue
-
+import logging
 try:  # Python 2.7+
     from logging import NullHandler
 except ImportError:
     class NullHandler(logging.Handler):
         def emit(self, record):
             pass
+try:
+    from weakref import finalize
+except ImportError:
+    from backports.weakref import finalize
+
+import tblib
+from future.utils import raise_from, raise_with_traceback
+
+from .utils import isint, _SharedCtypeQueue
 
 logging.getLogger(__name__).addHandler(NullHandler())
 
 
 # -----------------------------------------------------------------------------
 
-class CachedSequence(Sequence):
-    def __init__(self, sequence, cache_size=1, cache=None):
-        self.sequence = sequence
-        self.cache = cache or OrderedDict()
-        self.cache_size = cache_size
-
-    def __len__(self):
-        return len(self.sequence)
-
-    @basic_getitem
-    def __getitem__(self, key):
-        if key in self.cache.keys():
-            return self.cache[key]
-        else:
-            value = self.sequence[key]
-            if len(self.cache) >= self.cache_size:
-                self.cache.popitem(0)
-            self.cache[key] = value
-            return value
-
-    @basic_setitem
-    def __setitem__(self, key, value):
-        self.sequence[key] = value
-        if key in self.cache.keys():
-            self.cache[key] = value
-
-    def __iter__(self):
-        # bypass cache as it will be useless
-        return iter(self.sequence)
-
-
-def add_cache(arr, cache_size=1, cache=None):
-    """Adds a caching mechanism over a sequence.
-
-    A *reference* of the most recently accessed items will be kept and
-    reused when possible.
-
-    Args:
-        arr (Sequence): Sequence to provide a cache for.
-        cache_size (int): Maximum number of cached values (default 1).
-        cache (Optional[Dict[int, Any]]): Dictionary-like container to
-            use as cache. Defaults to a standard :class:`python:dict`.
-
-    Returns:
-        (Sequence): The sequence wrapped with a cache.
-    """
-    return CachedSequence(arr, cache_size, cache)
-
-
-# -----------------------------------------------------------------------------
-
 class PrefetchException(RuntimeError):
+    """
+    Raised when evaluation of an item in a worker fails.
+    """
     pass
 
 
 class JobStatus(IntEnum):
-    """A status descriptor for evaluated jobs."""
+    """
+    A status descriptor for evaluated jobs.
+    """
     QUEUED = 1
     DONE = 2
     FAILED = 3
 
 
-class AsyncSequenceManager(Sequence):
-    """A sequence like object that wraps AsyncSequence instances.
-
-    This class implements some generic logic to manage a sequence where
-    elements are read asynchronously and out of order.
-
-    The evaluation of selected items is managed by three means:
-
-    - A local buffer which will store computed values.
-    - An job submission queue which implements `put_nowait(job)`:
-      the job is tuple with a sequence inde to be computed and a
-      buffer index where the value should be written. A negative slot
-      index indicates that no further jobs will come and that wrkers may
-      terminate.
-    - A job completion queue which implements `get(timeout)`:
-      for any processed job, a triplet must be pushed containing
-      the computed index in the sequence, the buffer slot where it
-      resides and :attr:`JobStatus.DONE` or :attr:`JobStatus.FAILED`
-      depending on the completion status. The `timeout` argument
-      specifies the duration in second to wait for a value, a
-      :class:`python:queue.Empty` exception should be raised past this
-      delay.
-
-    Note that the order in which jobs completed is not important.
+class _AsyncSequenceManager(object):
     """
-    def __init__(self, async_seq, max_cached, timeout=1, anticipate=None):
+    Wraps AsyncSequence to expose a more familiar Sequence interface.
+    """
+    def __init__(self, async_seq, max_cached, timeout=1., anticipate=None):
         if max_cached < 1:
             raise ValueError("cache must contain at least one slot.")
 
@@ -143,9 +73,13 @@ class AsyncSequenceManager(Sequence):
     def __len__(self):
         return len(self.async_seq)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __getitem__(self, item):
         # TODO: manage slices
-        if not isinstance(item, Integral):
+        if not isint(item):
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
                 "slices, not " + item.__class__.__name__)
@@ -186,17 +120,15 @@ class AsyncSequenceManager(Sequence):
 
         # handle errors
         if self.status[self.first_slot] == JobStatus.FAILED:
-            error = PrefetchException(
-                "failed to get item {}".format(self.todo[self.first_slot]))
-            try:
-                self.async_seq.reraise_failed_job(self.first_slot)
-            except Exception as original_error:
-                raise_from(error, original_error)
-            finally:
-                self.first_slot = (self.first_slot + 1) % self.max_cached
+            msg = "failed to get item {}".format(self.todo[self.first_slot])
+            cause = self.async_seq.read_error(self.first_slot)
+            if cause is not None:
+                raise_from(PrefetchException(msg), cause)
+            else:
+                raise PrefetchException(msg)
 
         else:  # or return buffer slot
-            out = self.async_seq.read(self.first_slot)
+            out = self.async_seq.read_value(self.first_slot)
             self.first_slot = (self.first_slot + 1) % self.max_cached
             return out
 
@@ -205,10 +137,20 @@ class AsyncSequenceManager(Sequence):
         self.status[slot] = JobStatus.QUEUED
 
 
-class AsyncSequence:
+class _AsyncSequence(object):
+    """
+    Asynchronous container with a small local buffer and multiple workers.
+
+    Items from this container must be requested by queuing a job with
+    :func:`enqueue`, they will be transfered asynchronously at the
+    requested buffer slot by a background worker.
+
+    Calling :func:`next_completion` will block until a job is
+    completed, its result is then accessible using :func:`read_value`.
+    """
     def __init__(self, sequence, job_queue, done_queue,
                  values_cache, errors_cache,
-                 worker_t, nworkers=0, timeout=1, start_hook=None):
+                 worker_t, nworkers=0, timeout=1., start_hook=None):
         if nworkers < 1:
             nworkers += multiprocessing.cpu_count()
         if nworkers <= 0:
@@ -221,8 +163,8 @@ class AsyncSequence:
         self.done_queue = done_queue
 
         # buffers
-        self.values_cache = values_cache
-        self.errors_cache = errors_cache
+        self.values_slots = values_cache
+        self.errors_slots = errors_cache
 
         # workers
         self.worker_t = worker_t
@@ -231,7 +173,7 @@ class AsyncSequence:
             self._start_worker(i)
 
         # ensure clean termination in any situation
-        finalize(self, AsyncSequence._finalize, self)
+        finalize(self, _AsyncSequence._finalize, self)
 
     @staticmethod
     def _finalize(obj):
@@ -244,15 +186,15 @@ class AsyncSequence:
         for _ in obj.workers:
             obj.job_queue.put((0, -1))
 
-        for w in obj.workers:
-            w.join()
+        for worker in obj.workers:
+            worker.join()
 
     def _start_worker(self, i):
         if self.workers[i] is not None:
             self.workers[i].join()
         self.workers[i] = self.worker_t(
             target=self._target,
-            args=(i, self.sequence, self.values_cache, self.errors_cache,
+            args=(i, self.sequence, self.values_slots, self.errors_slots,
                   self.job_queue, self.done_queue,
                   self.timeout, self.start_hook))
         old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -263,28 +205,54 @@ class AsyncSequence:
         return len(self.sequence)
 
     def enqueue(self, item, slot):
+        """
+        Request retrieval of sequence item into given buffer slot.
+        """
         self.job_queue.put((item, slot), timeout=1)
 
     def next_completion(self):
+        """
+        Block until completion of any job.
+
+        Returns:
+            (int, int, JobStatus): index of computed value, buffer slot,
+            and job status.
+        """
         idx, slot, status = self.done_queue.get()
         while slot < 0:
             self._start_worker(-slot - 1)
             idx, slot, status = self.done_queue.get()
         return idx, slot, status
 
-    def read(self, slot):
-        return self.values_cache[slot]
+    def read_value(self, slot):
+        """
+        Return the content of the buffer at the given slot.
+        """
+        return self.values_slots[slot]
 
-    def reraise_failed_job(self, slot):
-        ev, tb = self.errors_cache[slot]
-        self.errors_cache[slot] = (None, "")
-        if ev is not None:
-            raise_with_traceback(ev, tb.as_traceback())
+    def read_error(self, slot):
+        """
+        Return the error that was raised while performing a job.
+
+        Args:
+            slot (int): the slot associated to the failed job.
+        Returns:
+             Optional[Exception]: the exception object or `None` if it
+             could not be retrieved.
+        """
+        error, trace_dump = self.errors_slots[slot]
+        self.errors_slots[slot] = (None, None)
+
+        if error is not None:
+            try:
+                raise_with_traceback(error, trace_dump.as_traceback())
+            except Exception as error:
+                return error
         else:
-            raise RuntimeError
+            return None
 
     @staticmethod
-    def _target(pid, sequence, values_buf, errors_buf, job_queue, done_queue,
+    def _target(pid, sequence, value_slots, error_slots, job_queue, done_queue,
                 timeout, start_hook):
         logger = logging.getLogger(__name__)
 
@@ -299,41 +267,48 @@ class AsyncSequence:
                 try:  # notify parent
                     done_queue.put((0, -pid - 1, 0))
                 finally:
-                    logger.debug("worker {}: timeout, exiting".format(pid))
+                    logger.debug("worker %d: timeout, exiting", pid)
                     return
 
-            except Exception:  # parent probably died
-                logger.debug("worker {}: parent died, exiting".format(pid))
+            except IOError:  # parent probably died
+                logger.debug("worker %d: parent died, exiting", pid)
                 return
 
-            if slot < 0:  # or terminate
-                logger.debug("worker {}: exiting".format(pid))
+            if slot < 0:  # terminate
+                logger.debug("worker %d: clean termination", pid)
                 return
 
             try:
-                values_buf[slot] = sequence[idx]
+                value_slots[slot] = sequence[idx]
                 job_status = JobStatus.DONE
 
-            except Exception:  # save error informations if any
-                et, ev, tb = sys.exc_info()
+            except Exception as error:  # save error informations if any
                 try:
-                    errors_buf[slot] = ev, tblib.Traceback(tb)
+                    trace_dump = tblib.Traceback(sys.exc_info()[2])
+                    error_slots[slot] = error, trace_dump
                 except Exception:
-                    errors_buf[slot] = \
-                        None, traceback.format_exception(et, ev, tb)
+                    error_slots[slot] = None, None
+
                 job_status = JobStatus.FAILED
 
             try:  # notify about job termination
                 done_queue.put((idx, slot, job_status))
-            except Exception:  # parent process died unexpectedly
-                logger.debug("worker {}: parent died, exiting".format(pid))
+
+            except IOError:  # parent process died unexpectedly
+                logger.debug("worker %d: parent died, exiting", pid)
                 return
 
 
 def prefetch(sequence, max_buffered=None,
-             nworkers=0, method='thread', timeout=1,
+             nworkers=0, method='thread', timeout=1.,
              start_hook=None, anticipate=None):
-    """Starts multiple workers to prefetch sequence values before use.
+    """
+    Wrap a sequence to prefetch values before use using background workers.
+
+    This function breaks the on-demand execution principle used in this
+    library but does so transparently using background workers.
+    This is ideally placed at the end of a transformation pipeline
+    when all the values must be evaluated in succession.
 
     .. image:: _static/prefetch.png
        :alt: gather
@@ -360,7 +335,7 @@ def prefetch(sequence, max_buffered=None,
               overhead between workers and the parent process.
 
             Defaults to `'thread'`.
-        timeout (int):
+        timeout (float):
             Maximum idling worker time in seconds, workers will be
             restarted automatically if needed (default 1).
         start_hook (Optional[Callable]):
@@ -373,7 +348,7 @@ def prefetch(sequence, max_buffered=None,
         Sequence: The wrapped sequence.
 
     Raises:
-        PrefetchError: on error while reading item from `sequence`
+        PrefetchException: on error while reading item from `sequence`
     """
     if method == "thread":
         job_queue = queue.Queue(maxsize=max_buffered + nworkers)
@@ -381,29 +356,33 @@ def prefetch(sequence, max_buffered=None,
         values_cache = [None] * max_buffered
         errors_cache = [None] * max_buffered
         worker_t = threading.Thread
-        async_seq = AsyncSequence(
+        async_seq = _AsyncSequence(
             sequence, job_queue, done_queue, values_cache, errors_cache,
             worker_t, nworkers, timeout, start_hook)
-        return AsyncSequenceManager(
+        return _AsyncSequenceManager(
             async_seq, max_buffered, timeout, anticipate)
     elif method in ("process", "proc"):
-        job_queue = SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
-        done_queue = SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
+        job_queue = _SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
+        done_queue = _SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
         manager = multiprocessing.Manager()
         values_cache = manager.list([None] * max_buffered)
-        errors_cache = manager.list([None, ""] * max_buffered)
+        errors_cache = manager.list([None, None] * max_buffered)
         worker_t = multiprocessing.Process
-        async_seq = AsyncSequence(
+        async_seq = _AsyncSequence(
             sequence, job_queue, done_queue, values_cache, errors_cache,
             worker_t, nworkers, timeout, start_hook)
-        return AsyncSequenceManager(
+        return _AsyncSequenceManager(
             async_seq, max_buffered, timeout, anticipate)
     else:
         raise ValueError("unsupported method")
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
-    logging.warning(
+    """
+    Return worker-backed sequence iterator (deprecated).
+    """
+    logger = logging.getLogger(__name__)
+    logger.warning(
         "Call to deprecated function eager_iter, use prefetch instead",
         category=DeprecationWarning,
         stacklevel=2)

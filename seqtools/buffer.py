@@ -1,25 +1,82 @@
-import logging
-import multiprocessing
+"""Tools related to buffering operations."""
+
+import sys
+from collections import OrderedDict
 import queue
 import signal
-import sys
-import traceback
-import weakref
+import multiprocessing
+from multiprocessing.sharedctypes import RawArray
+import logging
+try:
+    from weakref import finalize
+except ImportError:
+    from backports.weakref import finalize
 
 import tblib
+from future.utils import raise_from, raise_with_traceback
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
-from seqtools import PrefetchException
-from seqtools.evaluation import JobStatus
+from .utils import basic_getitem, basic_setitem
+from .evaluation import JobStatus, PrefetchException
 
 
-class BufferLoader:
-    def __init__(self, func, wrap_slot=None, max_cached=2, nworkers=0,
-                 timeout=1, start_hook=None):
+# -----------------------------------------------------------------------------
+
+class NumpyBuffers(object):
+    def __init__(self, nslots, sample):
+        nbytes = [field.nbytes for field in sample]
+        dtypes = [field.dtype for field in sample]
+        shapes = [field.shape for field in sample]
+        self.buffers = [RawArray('b', nslots * nb) for nb in nbytes]
+        self.slots = [
+            tuple(np.frombuffer(buf, t).reshape((nslots,) + s)[k]
+                  for buf, t, s in zip(self.buffers, dtypes, shapes))
+            for k in range(nslots)]
+
+    def __getitem__(self, item):
+        return self.slots[item]
+
+    def __setitem__(self, key, value):
+        for field, field_value in zip(self.slots[key], value):
+            field[...] = field_value
+
+
+class GenericBuffers(object):
+    def __init__(self, nslots, sample):
+        sample = [memoryview(field) for field in sample]
+        nbytes = [field.nbytes for field in sample]
+        formats = [field.format for field in sample]
+        shapes = [field.shape for field in sample]
+        buffers = [RawArray('b', nslots * nb) for nb in nbytes]
+        self.raw_slots = [
+            tuple(memoryview(buf).cast('b')[k * nb:(k + 1) * nb]
+                  for buf, nb, s in zip(buffers, nbytes, shapes))
+            for k in range(nslots)]
+        self.slots = [
+            tuple(field.cast(f, s)
+                  for field, f, s in zip(slot, formats, shapes))
+            for slot in self.raw_slots]
+
+    def __getitem__(self, item):
+        return self.slots[item]
+
+    def __setitem__(self, key, value):
+        for field, field_value in zip(self.raw_slots[key], value):
+            field[:] = memoryview(field_value).cast('b')
+
+
+# -----------------------------------------------------------------------------
+
+class BufferLoader(object):
+    def __init__(self, func, max_cached=2,
+                 nworkers=0, timeout=1., start_hook=None):
         if nworkers < 1:
             nworkers += multiprocessing.cpu_count()
         if nworkers <= 0:
             raise ValueError("need at least one worker")
-        wrap_slot = wrap_slot or (lambda x: x)
 
         self.generate = func
         self.n_workers = nworkers
@@ -27,21 +84,8 @@ class BufferLoader:
         self.start_hook = start_hook
 
         # prepare buffers
-        nbytes, shapes, formats = BufferLoader._probe_type(func())
-
-        self.buffers = []
-        for f, s in zip(formats, nbytes):
-            self.buffers.append(
-                multiprocessing.sharedctypes.RawArray('b', max_cached * s))
-
-        self.buffer_views = []
-        for i in range(max_cached):
-            view = []
-            for buf, fmt, nb, s in zip(self.buffers, formats, nbytes, shapes):
-                field_view = memoryview(buf)[i * nb:(i + 1) * nb]
-                field_view = field_view.cast('b').cast(fmt, s)
-                view.append(field_view)
-            self.buffer_views.append(wrap_slot(tuple(view)))
+        sample = func()  # TODO: save this value
+        self.value_slots = self._make_buffers(max_cached, sample)
 
         # job management
         self.job_queue = multiprocessing.Queue(maxsize=max_cached + nworkers)
@@ -59,16 +103,22 @@ class BufferLoader:
         self.next_in_queue = max_cached - 1
 
         # clean destruction
-        weakref.finalize(self, BufferLoader._finalize, self)
+        finalize(self, BufferLoader._finalize, self)
 
     @staticmethod
-    def _probe_type(sample):
-        sample = [memoryview(field) for field in sample]
-        nbytes = [field.nbytes for field in sample]
-        shapes = [field.shape for field in sample]
-        formats = [field.format for field in sample]
-
-        return nbytes, shapes, formats
+    def _make_buffers(max_cached, sample):
+        if np is not None and all(isinstance(f, np.ndarray) for f in sample):
+            return NumpyBuffers(max_cached, sample)
+        elif sys.version_info[:2] >= (3, 5):
+            try:
+                for f in sample:
+                    memoryview(f)
+            except TypeError:
+                raise TypeError("Unsupported data type.")
+            else:
+                return GenericBuffers(max_cached, sample)
+        else:
+            raise TypeError("Unsupported data type.")
 
     @staticmethod
     def _finalize(obj):
@@ -81,15 +131,16 @@ class BufferLoader:
         for _ in obj.workers:
             obj.job_queue.put(-1)
 
-        for w in obj.workers:
-            w.join()
+        for worker in obj.workers:
+            worker.join()
 
     def _start_worker(self, i):
         if self.workers[i] is not None:
             self.workers[i].join()
+
         self.workers[i] = multiprocessing.Process(
             target=self.target,
-            args=(i, self.generate, self.buffers, self.job_errors,
+            args=(i, self.generate, self.value_slots, self.job_errors,
                   self.job_queue, self.done_queue,
                   self.timeout, self.start_hook))
         old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -109,38 +160,32 @@ class BufferLoader:
 
         self.next_in_queue = done_slot
         if status == JobStatus.FAILED:
-            ev, tb = self.job_errors[done_slot]
-            if ev is not None:
-                ev = ev.with_traceback(tb.as_traceback())
-                msg = "Error while executing {}".format(self.generate)
-                raise PrefetchException(msg) from ev
+            msg = "Error while executing {}".format(self.generate)
+            error, trace_dump = self.job_errors[done_slot]
+            if error is not None:
+                try:
+                    raise_with_traceback(error, trace_dump.as_traceback())
+                except Exception as cause:
+                    raise_from(PrefetchException(msg), cause)
             else:
-                msg = "Error while executing {}:\n{}".format(self.generate, tb)
                 raise PrefetchException(msg)
 
         else:
-            return self.buffer_views[done_slot]
+            return self.value_slots[done_slot]
+
+    next = __next__
 
     @staticmethod
-    def target(pid, generate, values_buf, errors_buf, job_queue, done_queue,
-               timeout, start_hook):
+    def target(pid, func, value_slots, error_slots,
+               job_queue, done_queue, timeout, start_hook):
         logger = logging.getLogger(__name__)
 
         if start_hook is not None:
             start_hook()
 
-        logger.debug("worker {}: starting".format(pid))
+        logger.debug("worker %d: starting", pid)
 
         # make 1D bytes views of the buffer slots
-        max_cached = len(errors_buf)
-        values_buf = [memoryview(b) for b in values_buf]
-        item_nbytes = tuple(buf.nbytes // max_cached for buf in values_buf)
-        slot_views = []
-        for slot in range(max_cached):
-            slot_views.append(tuple(
-                buf.cast('b', (buf.nbytes,))[slot * sz:(slot + 1) * sz]
-                for buf, sz in zip(values_buf, item_nbytes)))
-
         while True:
             try:  # acquire job
                 slot = job_queue.get(timeout=timeout)
@@ -149,98 +194,91 @@ class BufferLoader:
                 try:  # notify parent
                     done_queue.put((-pid - 1, 0))
                 finally:
-                    logger.debug("worker {}: timeout, exiting".format(pid))
+                    logger.debug("worker %d: timeout, exiting", pid)
                     return
 
-            except Exception:  # parent probably died
-                logger.debug("worker {}: parent died, exiting".format(pid))
+            except IOError:  # parent probably died
+                logger.debug("worker %d: parent died, exiting", pid)
                 return
 
             if slot < 0:
-                logger.debug("worker {}: exiting".format(pid))
+                logger.debug("worker %d: clean termination", pid)
                 return
 
             try:  # generate and store value
-                value = generate()
-                value = [memoryview(field) for field in value]
-                value = [field.cast('b', (field.nbytes,)) for field in value]
-                for buf_view, field in zip(slot_views[slot], value):
-                    buf_view[:] = field
+                value_slots[slot] = func()
                 job_status = JobStatus.DONE
 
-            except Exception:  # save error informations if any
-                et, ev, tb = sys.exc_info()
+            except Exception as error:  # save error informations if any
                 try:
-                    errors_buf[slot] = ev, tblib.Traceback(tb)
+                    trace_dump = tblib.Traceback(sys.exc_info()[2])
+                    error_slots[slot] = error, trace_dump
                 except Exception:
-                    errors_buf[slot] = \
-                        None, traceback.format_exception(et, ev, tb)
+                    error_slots[slot] = None, None
+
                 job_status = JobStatus.FAILED
 
             try:  # notify about job termination
                 done_queue.put((slot, job_status))
-            except Exception:  # parent process died unexpectedly
-                logger.debug("worker {}: parent died, exiting".format(pid))
+            except IOError:  # parent process died unexpectedly
+                logger.debug("worker %d: parent died, exiting", pid)
                 return
 
 
-def load_buffers(func, wrap_slot=None, max_cached=2,
-                 nworkers=0, timeout=1, start_hook=None):
+def load_buffers(func, max_cached=2,
+                 nworkers=0, timeout=1., start_hook=None):
     """
-    Repetitively run `func` to fill memory buffers, uses
-    multiprocessing to accelerate execution.
+    Repetitively run `func` in workers to fill memory buffers.
 
-    (Only available for python 3.5 and above).
-
-    Note:
-        `func` will be called once to probe the value types and shapes
+    Can be used to quickly generate random minibatches of data.
 
     Args:
-        func (Callable[[], Tuple):
-            A function that returns a tuple of buffer-like objects
-            (for example :class:`numpy:numpy.ndarray` or
-            :class:`python:array.array`), the shapes and types must
-            remain consistent across calls.
-        wrap_slot (Callable[Tuple, Any]):
-            a function that takes a buffer slot, ie. a tuple of
-            :func:`python:memoryview` matching the output of `func`,
-            and wraps them into more convenient containers.
+        func (Callable[, Tuple]):
+            A function that returns a tuple of arrays.
+            Currently supported array types are
+            :class:`numpy:numpy.ndarray`, and
+            :class:`python:array.array` (which are wrapped into
+            :class:`Memoryviews <python:memoryview>`).
         max_cached (int):
-            Maximum number of precomputed values/memory slots.
+            Maximum number of precomputed values/memory slots
+            (default 2).
         nworkers (int):
-            Number of worker processes.
-        timeout (Union[int,float]):
+            Number of workers, negative values or zero indicate the
+            number of cpu cores to spare (default 0).
+        timeout (float):
             Number of seconds before idle workers go to sleep.
-        start_hook (Callable[[], Any]):
-            Function to call in each worker at startup (for example
-            :func:`python:random.seed`)
+        start_hook (Optional[Callable]]):
+            Optional function to be run by each worker on startup, for
+            example :func:`python:random.seed`.
 
-    Returns:
+    Return:
         Iterator[Tuple]: An iterator on buffer slots updated with the
-        outputs of `func`.
+        outputs of `func`. Iterating raises :class:`PrefetchException`
+        instead of returning a value when `func` raises an error.
 
-    Raises:
-        PrefetchError: when `func` raises an error.
+    Notes:
+        - The shapes and types of `func` outputs must remain consistent
+          across calls.
+        - The buffers are reused between iterations, their content
+          should therefore be considered undefined except for the last
+          returned one.
 
     Example:
-
        >>> import numpy as np
-
+       >>>
        >>> def make_sample():
        ...     return 2 * np.random.rand(5, 3), np.arange(5)
        >>>
-       >>> def wrap_slot(slot):
-       ...     slot_x, slot_y = slot
-       ...     return (np.frombuffer(slot_x, np.float).reshape(slot_x.shape),
-       ...             np.frombuffer(slot_y, np.int).reshape(slot_y.shape))
-       >>>
        >>> # start workers, making sure their random seeds are different
-       >>> sample_iter = load_buffers(
-       ...     make_sample, wrap_slot, start_hook=np.random.seed)
+       >>> sample_iter = load_buffers(make_sample, start_hook=np.random.seed)
        >>>
        >>> x, y = np.zeros((5, 3)), np.zeros((5,))
        >>> for _ in range(10000):
+       ...     # grab next available sample
        ...     x_, y_ = next(sample_iter)
+       ...
+       ...     # don't keep references of x_ and y_,
+       ...     # just use them before the next iteration:
        ...     x += x_
        ...     y += y_
        >>>
@@ -253,5 +291,56 @@ def load_buffers(func, wrap_slot=None, max_cached=2,
        >>> print(np.round(y / 10000))
        [0. 1. 2. 3. 4.]
     """
-    return BufferLoader(func, wrap_slot,
-                        max_cached, nworkers, timeout, start_hook)
+    return BufferLoader(func, max_cached, nworkers, timeout, start_hook)
+
+
+# -----------------------------------------------------------------------------
+
+class CachedSequence(object):
+    def __init__(self, sequence, cache_size=1, cache=None):
+        self.sequence = sequence
+        self.cache = OrderedDict() if cache is None else cache
+        self.cache_size = cache_size
+
+    def __len__(self):
+        return len(self.sequence)
+
+    def __iter__(self):
+        # bypass cache as it will be useless
+        return iter(self.sequence)
+
+    @basic_getitem
+    def __getitem__(self, key):
+        if key in self.cache.keys():
+            return self.cache[key]
+        else:
+            value = self.sequence[key]
+            if len(self.cache) >= self.cache_size:
+                self.cache.popitem(False)
+            self.cache[key] = value
+            return value
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        self.sequence[key] = value
+        if key in self.cache.keys():
+            self.cache[key] = value
+
+
+def add_cache(arr, cache_size=1, cache=None):
+    """
+    Add a caching mechanism over a sequence.
+
+    A *reference* of the most recently accessed items will be kept and
+    reused when possible.
+
+    Args:
+        arr (Sequence): Sequence to provide a cache for.
+        cache_size (int): Maximum number of cached values (default 1).
+        cache (Optional[Dict[int, Any]]): Dictionary-like container to
+            use as cache. Defaults to a standard :class:`python:dict`.
+
+    Return:
+        (Sequence): The sequence wrapped with a cache.
+    """
+    return CachedSequence(arr, cache_size, cache)

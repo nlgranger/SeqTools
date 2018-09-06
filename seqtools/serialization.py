@@ -1,3 +1,7 @@
+"""
+Hackish workaround to help serialize a pipeline inclusing its functions.
+"""
+
 import os
 import sys
 import inspect
@@ -11,13 +15,16 @@ else:
     from importlib import import_module
 
 
-class SerializableFunc:
-    """Makes a function independent from its source file.
+class SerializableFunc(object):
+    """
+    Decorate a function to become independent from its source file.
 
     This decorator alters the serialization hook so that unpickling the
     pickled function will import a back-up of the original source code.
+    This way, a complete pipeline can be saved and reloaded.
 
     .. warning::
+
         This is a hackish solution where only the source file
         containing the function is saved, regenerated and reloaded.
         Use with care.

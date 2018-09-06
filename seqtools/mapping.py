@@ -1,6 +1,7 @@
 import inspect
-from typing import Sequence
+
 from future.utils import raise_from
+
 from .utils import basic_getitem
 
 
@@ -8,7 +9,7 @@ class MappingException(Exception):
     pass
 
 
-class Mapping(Sequence):
+class Mapping(object):
     def __init__(self, f, sequences, debug_msg=None):
         if not callable(f):
             raise TypeError("f must be callable")
@@ -22,17 +23,6 @@ class Mapping(Sequence):
     def __len__(self):
         return len(self.sequences[0])
 
-    @basic_getitem
-    def __getitem__(self, item):
-        try:
-            return self.f(*(l[item] for l in self.sequences))
-
-        except Exception as error:
-            if self.debug_msg is not None:
-                raise_from(error, MappingException(self.debug_msg))
-            else:
-                raise
-
     def __iter__(self):
         for args in zip(*self.sequences):
             try:
@@ -44,9 +34,21 @@ class Mapping(Sequence):
                 else:
                     raise
 
+    @basic_getitem
+    def __getitem__(self, item):
+        try:
+            return self.f(*(l[item] for l in self.sequences))
+
+        except Exception as error:
+            if self.debug_msg is not None:
+                raise_from(error, MappingException(self.debug_msg))
+            else:
+                raise
+
 
 def smap(f, *sequence):
-    """Returns a mapping of `f` over the sequence(s).
+    """
+    Return a mapping of `f` over the sequence(s).
 
     Equivalent to :code:`[f(x) for x in sequence]` with on-demand evaluation.
 
@@ -92,8 +94,9 @@ def smap(f, *sequence):
 
 
 def starmap(f, sequence):
-    """Maps a function over a sequence of argument tuples.
+    """
+    Map a function over a sequence of argument tuples.
 
-    This a sequential equaivalent of :func:`python:itertools.starmap`.
+    A sequential equivalent of :func:`python:itertools.starmap`.
     """
     return smap(lambda x: f(*x), sequence)

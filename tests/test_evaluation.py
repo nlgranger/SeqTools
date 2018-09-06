@@ -1,77 +1,15 @@
-import sys
 import random
-import array
 import logging
 from time import sleep, time
-import multiprocessing
 import pytest
 
-from seqtools import add_cache, smap, prefetch, PrefetchException
-
-if sys.version_info[:2] >= (3, 5):
-    from seqtools import load_buffers
+from seqtools import smap, prefetch, PrefetchException
 
 
 logging.basicConfig(level=logging.DEBUG)
 seed = int(random.random() * 100000)
 # seed = 29130
 random.seed(seed)
-
-
-def test_cached():
-    def f(x):
-        return x
-
-    cache_size = 3
-    arr = [random.random() for _ in range(25)]
-    z = add_cache(arr, cache_size)
-
-    assert list(z) == arr
-    assert list(z[10:]) == arr[10:]
-    assert [z[i] for i in range(10)] == arr[:10]
-
-    z[:10] = list(range(0, -10, -1))
-    assert list(z[10:]) == arr[10:]
-    assert list(z[:10]) == list(range(0, -10, -1))
-
-    y = smap(f, arr)
-    z = add_cache(y, cache_size)
-
-    t1 = time()
-    for i in range(len(arr)):
-        assert z[i] == arr[i]
-        for j in range(max(0, i - cache_size + 1), i + 1):
-            assert z[j] == arr[j]
-    t2 = time()
-
-    duration = t2 - t1
-    assert duration < .28
-
-
-@pytest.mark.no_cover
-@pytest.mark.timeout(5)
-def test_cached_timing():
-    def f(x):
-        sleep(.01)
-        return x
-
-    cache_size = 3
-    arr = [random.random() for _ in range(100)]
-
-    y = smap(f, arr)
-    z = add_cache(y, cache_size)
-
-    t1 = time()
-    for i in range(len(arr)):
-        assert z[i] == arr[i]
-        for j in range(max(0, i - cache_size + 1), i + 1):
-            assert z[j] == arr[j]
-    t2 = time()
-
-    duration = t2 - t1
-    print("test_cached_timing {:.2f}s".format(duration))
-
-    assert duration < 1.2
 
 
 @pytest.mark.timeout(15)
@@ -194,62 +132,3 @@ def test_prefetch_errors(method):
 
     assert y[0] == 1
     assert y[1] == 2
-
-
-@pytest.mark.skipif(sys.version_info[:2] < (3, 5),
-                    reason="requires python3.5 or higher")
-def test_load_buffer():
-    class MinibatchSampler:
-        def __init__(self):
-            self.state = multiprocessing.Value('l', 0)
-
-        def __call__(self):
-            with self.state.get_lock():
-                v = self.state.value
-                self.state.value += 1
-            out = (array.array('l', range(v, v + 5)),
-                   array.array('f', range(v, v + 5)))
-            return out
-
-    def wrap_slot(x):
-        return tuple([array.array(f.format, f.tolist()) for f in x])
-
-    samples_1 = []
-    sampler = MinibatchSampler()
-    sampler()  # consume sample
-    for i in range(100):
-        samples_1.append(sampler())
-    samples_1 = sorted(samples_1)
-
-    samples_2 = []
-    sample_iter = load_buffers(
-        MinibatchSampler(), max_cached=10, nworkers=2, timeout=.1)
-    pause_n_times = 3
-    for i in range(100):
-        if pause_n_times > 0 and random.random() < 1 / (99 - i - pause_n_times):
-            print("{} pause".format(i))
-            sleep(1)
-            pause_n_times -= 1
-        samples_2.append(wrap_slot(next(sample_iter)))
-    samples_2 = sorted(samples_2)
-
-    assert samples_1[:-10] == samples_2[:-10]
-
-    sample_iter._finalize(sample_iter)  # for coverage
-
-    class MinibatchSampler:
-        def __init__(self):
-            self.state = multiprocessing.Value('l', 0)
-
-        def __call__(self):
-            with self.state.get_lock():
-                v = self.state.value
-                self.state.value += 1
-            if v == 1:
-                raise ValueError("aarrgh")
-            out = (array.array('l', range(v, v + 5)),
-                   array.array('f', range(v, v + 5)))
-            return out
-
-    with pytest.raises(PrefetchException):
-        next(load_buffers(MinibatchSampler(), nworkers=1))

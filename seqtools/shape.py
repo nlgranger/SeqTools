@@ -1,4 +1,5 @@
-from typing import Sequence
+"""Operations that assemble sequences or their elements."""
+
 import array
 import bisect
 from logging import warning
@@ -10,7 +11,7 @@ except ImportError:
 from .utils import isint, clip, basic_getitem, basic_setitem
 
 
-class Collation(Sequence):
+class _Collation(object):
     def __init__(self, sequences):
         self.sequences = sequences
 
@@ -21,6 +22,9 @@ class Collation(Sequence):
     def __len__(self):
         return len(self.sequences[0])
 
+    def __iter__(self):
+        return zip(*self.sequences)
+
     @basic_getitem
     def __getitem__(self, item):
         return tuple([seq[item] for seq in self.sequences])
@@ -30,12 +34,10 @@ class Collation(Sequence):
         for seq, val in zip(self.sequences, value):
             seq[key] = val
 
-    def __iter__(self):
-        return zip(*self.sequences)
-
 
 def collate(sequences):
-    """Returns a view on the collated/pasted/stacked sequences.
+    """
+    Return a view on the collated/pasted/stacked sequences.
 
     The n'th element is a tuple of the n'th elements from each sequence.
 
@@ -52,14 +54,14 @@ def collate(sequences):
         >>> arr[2]
         (3, 'c', 7)
     """
-    return Collation(sequences)
+    return _Collation(sequences)
 
 
-class Concatenation(Sequence):
+class _Concatenation(object):
     def __init__(self, sequences):
         self.sequences = []
         for seq in sequences:
-            if isinstance(seq, Concatenation):
+            if isinstance(seq, _Concatenation):
                 for subseq in seq.sequences:
                     self.sequences.append(subseq)
             else:
@@ -71,7 +73,10 @@ class Concatenation(Sequence):
             self.offsets[i] += self.offsets[i - 1]
 
     def __len__(self):
-        return self.offsets[-1]
+        return int(self.offsets[-1])
+
+    def __iter__(self):
+        return itertools.chain(*self.sequences)
 
     @basic_getitem
     def __getitem__(self, key):
@@ -87,22 +92,20 @@ class Concatenation(Sequence):
         offset = self.offsets[target_seq]
         seq[key - offset] = value
 
-    def __iter__(self):
-        return itertools.chain(*self.sequences)
-
 
 def concatenate(sequences):
-    """Returns a view on the concatenated sequences.
+    """
+    Return a view on the concatenated sequences.
 
     .. image:: _static/concatenate.png
        :alt: concatenate
        :width: 25%
        :align: center
     """
-    return Concatenation(sequences)
+    return _Concatenation(sequences)
 
 
-class BatchView(Sequence):
+class _BatchView(object):
     def __init__(self, sequence, batch_size,
                  drop_last=False, pad=None, collate_fn=None):
         self.sequence = sequence
@@ -115,10 +118,12 @@ class BatchView(Sequence):
             warning("pad value is ignored because drop_last is true")
 
     def __len__(self):
-        if len(self.sequence) % self.batch_size > 0 and not self.drop_last:
-            return len(self.sequence) // self.batch_size + 1
-        else:
-            return len(self.sequence) // self.batch_size
+        extra = len(self.sequence) % self.batch_size > 0 and not self.drop_last
+        return len(self.sequence) // self.batch_size + (1 if extra else 0)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
 
     @basic_getitem
     def __getitem__(self, key):
@@ -155,7 +160,8 @@ class BatchView(Sequence):
 
 
 def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
-    """Returns a view of a sequence in groups of k items.
+    """
+    Return a view of a sequence in groups of k items.
 
     .. image:: _static/batch.png
         :alt: batch
@@ -179,13 +185,14 @@ def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
             An optional function that takes a sequence of items and
             returns a consolidated batch.
 
-    Returns:
+    Return:
         Sequence: A sequence of batches.
+
     """
-    return BatchView(sequence, k, drop_last, pad, collate_fn)
+    return _BatchView(sequence, k, drop_last, pad, collate_fn)
 
 
-class Unbatching:
+class _Unbatching(object):
     def __init__(self, sequence, batch_size, last_batch_size=0):
         self.sequence = sequence
         self.batch_size = batch_size
@@ -195,16 +202,17 @@ class Unbatching:
         return max(0, len(self.sequence) - 1) * self.batch_size \
             + self.last_batch_size
 
+    def __iter__(self):
+        return itertools.chain.from_iterable(self.sequence)
+
     @basic_getitem
     def __getitem__(self, key):
         return self.sequence[key // self.batch_size][key % self.batch_size]
 
-    def __iter__(self):
-        return itertools.chain.from_iterable(self.sequence)
-
 
 def unbatch(sequence, batch_size, last_batch_size=None):
-    """Returns a view on the concatenation of batched items.
+    """
+    Return a view on the concatenation of batched items.
 
     Args:
         sequence (Sequence[Sequence]):
@@ -216,13 +224,14 @@ def unbatch(sequence, batch_size, last_batch_size=None):
             The size for the last batch if the batch size does not align
             to the sequence size (default 0).
 
-    Returns:
+    Return:
         Sequence: The concatenation of all batches in `sequence`.
+
     """
-    return Unbatching(sequence, batch_size, last_batch_size)
+    return _Unbatching(sequence, batch_size, last_batch_size)
 
 
-class Split(Sequence):
+class _Split(object):
     def __init__(self, sequence, edges):
         size = len(sequence)
 
@@ -258,6 +267,10 @@ class Split(Sequence):
     def __len__(self):
         return len(self.starts)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     @basic_getitem
     def __getitem__(self, key):
         return self.sequence[self.starts[key]:self.stops[key]]
@@ -274,7 +287,8 @@ class Split(Sequence):
 
 
 def split(sequence, edges):
-    """Splits a sequence into a succession of subsequences.
+    """
+    Split a sequence into a succession of subsequences.
 
     Args:
         sequence (Sequence):
@@ -291,7 +305,8 @@ def split(sequence, edges):
             - An sequence of int tuples specifies the limits of
               subsequences.
 
-    Returns:
+    Return:
         Sequence: A sequence of subsequences split accordingly.
+
     """
-    return Split(sequence, edges)
+    return _Split(sequence, edges)

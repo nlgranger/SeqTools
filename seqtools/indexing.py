@@ -1,4 +1,3 @@
-from typing import Sequence, Iterable
 from numbers import Integral
 import itertools
 import bisect
@@ -9,7 +8,7 @@ from future.builtins import range
 from .utils import isint, basic_getitem, basic_setitem, normalize_slice
 
 
-class Range(Sequence):
+class Range:
     def __init__(self, start, stop=None, step=None):
         if stop is None and step is None:
             stop = start
@@ -31,6 +30,9 @@ class Range(Sequence):
     def __len__(self):
         return abs(self.stop - self.start) // abs(self.step)
 
+    def __iter__(self):
+        return iter(range(self.start, self.stop, self.step))
+
     def __getitem__(self, key):
         if isinstance(key, slice):
             start, stop, step = normalize_slice(
@@ -50,17 +52,15 @@ class Range(Sequence):
 
         return self.start + self.step * key
 
-    def __iter__(self):
-        return iter(range(self.start, self.stop, self.step))
-
 
 def arange(start, stop=None, step=None):
-    """Sequential equivalent of Python built-in :class:`python:range`.
+    """
+    Sequential equivalent of Python built-in :class:`python:range`.
     """
     return Range(start, stop, step)
 
 
-class Reindexing(Sequence):
+class Reindexing:
     def __init__(self, sequence, indexes):
         if isinstance(sequence, Reindexing):  # optimize nested subsets
             indexes = array('l', (sequence.indexes[i] for i in indexes))
@@ -71,6 +71,10 @@ class Reindexing(Sequence):
 
     def __len__(self):
         return len(self.indexes)
+
+    def __iter__(self):
+        for i in self.indexes:
+            yield self.sequence[i]
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -119,7 +123,8 @@ class Reindexing(Sequence):
 
 
 def gather(sequence, indexes):
-    """Returns a view on the sequence reordered by indexes.
+    """
+    Return a view on the sequence reordered by indexes.
 
     .. image:: _static/gather.png
        :alt: gather
@@ -142,13 +147,22 @@ def reindex(sequence, indexes):
     return Reindexing(sequence, indexes)
 
 
-class Cycle(Sequence):
+class Cycle:
     def __init__(self, sequence, size):
         self.sequence = sequence
         self.size = int(size)
 
     def __len__(self):
         return self.size
+
+    def __iter__(self):
+        i = 0
+        while True:
+            for v in self.sequence:
+                yield v
+                i += 1
+                if i == self.size:
+                    return
 
     @basic_getitem
     def __getitem__(self, key):
@@ -158,14 +172,15 @@ class Cycle(Sequence):
     def __setitem__(self, key, value):
         self.sequence[key % len(self.sequence)] = value
 
-    def __iter__(self):
-        for i in range(self.size):
-            yield self.sequence[i % len(self.sequence)]
 
-
-class InfiniteCycle(Iterable):
+class InfiniteCycle:
     def __init__(self, sequence):
         self.sequence = sequence
+
+    def __iter__(self):
+        while True:
+            for v in self.sequence:
+                yield v
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -197,14 +212,14 @@ class InfiniteCycle(Iterable):
                 self.__class__.__name__ + " indices must be integers or "
                 "slices, not " + key.__class__.__name__)
 
-    def __iter__(self):
-        for i in itertools.count():
-            yield self.sequence[i % len(self.sequence)]
-
 
 def cycle(sequence, limit=None):
-    """Returns a view of the repeated sequence with an optional size
-    limit.
+    """
+    Return repeated view of a sequence.
+
+    Args:
+        sequence (Sequence): The sequence to be repeated.
+        limit (Optional[int]): An optional size limit.
 
     .. image:: _static/cycle.png
        :alt: collate
@@ -214,7 +229,7 @@ def cycle(sequence, limit=None):
     return InfiniteCycle(sequence) if limit is None else Cycle(sequence, limit)
 
 
-class Interleaving(Sequence):
+class Interleaving(object):
     def __init__(self, sequences):
         offsets_in = [0]  # end of sequences in input indexing
         offsets_out = [0]  # end of sequences in output indexing
@@ -245,16 +260,6 @@ class Interleaving(Sequence):
         idx = self.offsets_in[n_exhausted] + key // n_remaining_seqs
         return seq, idx
 
-    @basic_getitem
-    def __getitem__(self, key):
-        seq, idx = self._convert_1d_key(key)
-        return self.sequences[seq][idx]
-
-    @basic_setitem
-    def __setitem__(self, key, value):
-        seq, idx = self._convert_1d_key(key)
-        self.sequences[seq][idx] = value
-
     def __iter__(self):
         iterators = [iter(seq) for seq in self.sequences]
         i = -1
@@ -266,9 +271,20 @@ class Interleaving(Sequence):
                 del iterators[i]
                 i -= 1
 
+    @basic_getitem
+    def __getitem__(self, key):
+        seq, idx = self._convert_1d_key(key)
+        return self.sequences[seq][idx]
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        seq, idx = self._convert_1d_key(key)
+        self.sequences[seq][idx] = value
+
 
 def interleave(*sequences):
-    """Interleaves elements from several sequences into one.
+    """
+    Interleave elements from several sequences into one.
 
     Sequences don't need to have the same length, the cycling will
     operate between whatever sequences are left.
@@ -289,13 +305,16 @@ def interleave(*sequences):
     return Interleaving(sequences)
 
 
-class Repetition(Sequence):
+class Repetition(object):
     def __init__(self, item, times):
         self.object = item
         self.times = times
 
     def __len__(self):
         return self.times
+
+    def __iter__(self):
+        return itertools.repeat(self.object, self.times)
 
     @basic_getitem
     def __getitem__(self, item):
@@ -305,13 +324,16 @@ class Repetition(Sequence):
     def __setitem__(self, key, value):
         self.object = value
 
-    def __iter__(self):
-        return itertools.repeat(self.object, self.times)
 
-
-class InfiniteRepetition(Iterable):
+class InfiniteRepetition(object):
     def __init__(self, value):
         self.value = value
+
+    def __iter__(self):
+        return itertools.repeat(self.value)
+
+    def __len__(self):
+        return 0
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -380,13 +402,14 @@ class InfiniteRepetition(Iterable):
                 self.__class__.__name__ + " indices must be integers or "
                 "slices, not " + key.__class__.__name__)
 
-    def __iter__(self):
-        return itertools.repeat(self.value)
-
 
 def repeat(value, times=None):
-    """Returns a sequence repeating the given value with an optional
-    size limit.
+    """
+    Make a sequence by repeating a value.
+
+    Args:
+        value (Any): Value to be (virtually) replicated.
+        times (Optional[int]): Optional size limit.
 
     .. image:: _static/repeat.png
        :alt: repeat

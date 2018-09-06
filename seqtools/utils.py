@@ -1,35 +1,39 @@
+"""Miscellaneous tools for internal use."""
+
 import ctypes
 import struct
 import numbers
-from typing import Sequence
 import queue
 import multiprocessing
 from multiprocessing.sharedctypes import RawArray, RawValue
 
 
 def isint(x):
+    """Return wether `x` is an integral number."""
     return isinstance(x, numbers.Integral)
 
 
 def clip(x, a, b):
+    """Clip value within specified range."""
     return max(a, min(x, b))
 
 
 def basic_getitem(func):
-    """Decorator that adds slicing support for a __getitem__.
+    """
+    Decorate a `__getitem__` method to add slicing support.
 
     Args:
-        func (Callable[[MutableSequence, int], Any]):
+        func (Callable[[Sequence, int], Any]):
             A `__getitem__` method that only accepts positive integer
             indices.
 
-    Returns:
+    Return:
         A `__getitem__` method that accepts negative indexing and
         slicing.
     """
     def getitem(self, key):
         if isinstance(key, slice):
-            return SeqSlice(self, key)
+            return _SeqSlice(self, key)
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
@@ -50,20 +54,21 @@ def basic_getitem(func):
 
 
 def basic_setitem(func):
-    """Decorator that adds slicing support for a __setitem__.
+    """
+    Decorate a `__setitem__` method to add slicing support.
 
     Args:
         func (Callable[[MutableSequence, int, Any]]):
             A `__setitem__` method that only accepts positive integer
             indices.
 
-    Returns:
+    Return:
         A `__setitem__` method that accepts negative indexing and
         slicing.
     """
     def setitem(self, key, value):
         if isinstance(key, slice):
-            slice_view = SeqSlice(self, key)
+            slice_view = _SeqSlice(self, key)
 
             if len(slice_view) != len(value):
                 raise ValueError(
@@ -92,9 +97,8 @@ def basic_setitem(func):
 
 
 def normalize_slice(start, stop, step, size):
-    """Normalize slice parameters so that start and stop are positive
-    integers and the base index can be easily computed by
-    :code:`start + i * step`.
+    """
+    Normalize slice parameters.
 
     Args:
         start (Optional[int]): start index
@@ -102,8 +106,10 @@ def normalize_slice(start, stop, step, size):
         step (Optional[int]): step size
         size (int): size of the sliced sequence
 
-    Returns:
-        (int, int, int): a triplet of integers start, stop, step with
+    Return:
+        (int, int, int): A triplet of integers start, stop, step start
+        and stop are positive integers and the base index can be easily
+        computed by :code:`start + i * step`.
     """
     if step is None:
         step = 1
@@ -135,9 +141,9 @@ def normalize_slice(start, stop, step, size):
     return start, stop, step
 
 
-class SeqSlice(Sequence):
+class _SeqSlice(object):
     def __init__(self, sequence, key):
-        if isinstance(sequence, SeqSlice):
+        if isinstance(sequence, _SeqSlice):
             key_start, key_stop, key_step = normalize_slice(
                 key.start, key.stop, key.step, len(sequence))
             numel = abs(key_stop - key_start) // abs(key_step)
@@ -158,6 +164,10 @@ class SeqSlice(Sequence):
     def __len__(self):
         return abs(self.stop - self.start) // abs(self.step)
 
+    def __iter__(self):
+        for i in range(self.start, self.stop, self.step):
+            yield self.sequence[i]
+
     @basic_getitem
     def __getitem__(self, key):
         return self.sequence[self.start + key * self.step]
@@ -167,8 +177,10 @@ class SeqSlice(Sequence):
         self.sequence[self.start + key * self.step] = value
 
 
-class SharedCtypeQueue:
-    """Simplified multiprocessing queue for `struct` entities."""
+class _SharedCtypeQueue:
+    """
+    Simplified multiprocessing queue for `struct` entities.
+    """
     def __init__(self, fmt, maxsize):
         self.fmt = fmt
         self.itemsize = struct.calcsize(fmt)
@@ -188,43 +200,29 @@ class SharedCtypeQueue:
 
         with self.startlock:  # no timeout but should go unnoticed
             offset = (self.start.value % self.maxsize) * self.itemsize
-            self.start.value += 1
-
-            # copy value
             buf = self.values[offset:offset + self.itemsize]
 
             try:
                 value = struct.unpack(self.fmt, buf)
-            except Exception:
-                raise
-            finally:
-                # release buffer slot for writing
+            finally:  # release buffer slot for writing
+                self.start.value += 1
                 self.putsem.release()
 
         return value
-
-    def get_nowait(self):
-        return self.get(blocking=False)
 
     def put(self, value, blocking=True, timeout=None):
         # wait for an empty slot
         if not self.putsem.acquire(blocking, timeout):
             raise queue.Full()
 
-        # take specific slot
         with self.stoplock:  # no timeout but should go unnoticed
             offset = (self.stop.value % self.maxsize) * self.itemsize
 
             try:  # transfer values and update state
                 struct.pack_into(self.fmt, self.values, offset, *value)
-            except Exception:
-                raise
-            else:
+            finally:  # activate read slot
                 self.stop.value += 1
                 self.getsem.release()
-
-    def put_nowait(self, value):
-        self.put(value, blocking=False)
 
     def empty(self):
         return self.stop.value == self.start.value

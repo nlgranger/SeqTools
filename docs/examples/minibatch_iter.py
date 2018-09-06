@@ -1,7 +1,7 @@
 from __future__ import print_function
 import time
 import seqtools
-
+import seqtools.buffer
 
 files = ['file1', 'file2', 'file3', 'file4', 'file5',
          'file6', 'file7', 'file8', 'file9', 'file10']
@@ -13,7 +13,7 @@ def load(some_file):
 
 
 loaded_files = seqtools.smap(load, files)
-loaded_files = seqtools.add_cache(loaded_files, 2)
+loaded_files = seqtools.buffer.add_cache(loaded_files, 2)
 all_samples = seqtools.unbatch(loaded_files, 200, 10)
 
 
