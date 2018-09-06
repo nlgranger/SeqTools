@@ -227,34 +227,31 @@ class BufferLoader(object):
 
 def load_buffers(func, max_cached=2,
                  nworkers=0, timeout=1., start_hook=None):
-    """
-    Repetitively run `func` in workers to fill memory buffers.
+    """Repetitively run `func` in workers to fill memory buffers.
 
     Can be used to quickly generate random minibatches of data.
 
     Args:
         func (Callable[, Tuple]):
-            A function that returns a tuple of arrays.
-            Currently supported array types are
-            :class:`numpy:numpy.ndarray`, and
+            A function that returns a tuple of arrays. Currently supported
+            array types are: :class:`numpy:numpy.ndarray`, and
             :class:`python:array.array` (which are wrapped into
             :class:`Memoryviews <python:memoryview>`).
         max_cached (int):
-            Maximum number of precomputed values/memory slots
-            (default 2).
+            Maximum number of precomputed values/memory slots (default 2).
         nworkers (int):
-            Number of workers, negative values or zero indicate the
-            number of cpu cores to spare (default 0).
+            Number of workers, negative values or zero indicate the number of
+            cpu cores to spare (default 0).
         timeout (float):
             Number of seconds before idle workers go to sleep.
         start_hook (Optional[Callable]]):
-            Optional function to be run by each worker on startup, for
-            example :func:`python:random.seed`.
+            Optional function to be run by each worker on startup, for example
+            :func:`python:random.seed`.
 
     Return:
-        Iterator[Tuple]: An iterator on buffer slots updated with the
-        outputs of `func`. Iterating raises :class:`PrefetchException`
-        instead of returning a value when `func` raises an error.
+        Iterator[Tuple]: An iterator on buffer slots updated with the outputs
+            of `func`. Iterating raises :class:`PrefetchException` instead of
+            returning a value when `func` raises an error.
 
     Notes:
         - The shapes and types of `func` outputs must remain consistent
@@ -337,8 +334,8 @@ def add_cache(arr, cache_size=1, cache=None):
     Args:
         arr (Sequence): Sequence to provide a cache for.
         cache_size (int): Maximum number of cached values (default 1).
-        cache (Optional[Dict[int, Any]]): Dictionary-like container to
-            use as cache. Defaults to a standard :class:`python:dict`.
+        cache (Optional[Dict[int, Any]]): Dictionary-like container to use as
+            cache. Defaults to a standard :class:`python:dict`.
 
     Return:
         (Sequence): The sequence wrapped with a cache.

@@ -52,8 +52,8 @@ Indexing and reshaping
 .. autofunction:: split
 
 
-Evaluation
-----------
+Evaluation and buffering
+------------------------
 
 .. autofunction:: add_cache
 .. autofunction:: prefetch

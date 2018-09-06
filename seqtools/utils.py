@@ -19,8 +19,7 @@ def clip(x, a, b):
 
 
 def basic_getitem(func):
-    """
-    Decorate a `__getitem__` method to add slicing support.
+    """Decorate a `__getitem__` method to add slicing support.
 
     Args:
         func (Callable[[Sequence, int], Any]):
@@ -54,8 +53,7 @@ def basic_getitem(func):
 
 
 def basic_setitem(func):
-    """
-    Decorate a `__setitem__` method to add slicing support.
+    """Decorate a `__setitem__` method to add slicing support.
 
     Args:
         func (Callable[[MutableSequence, int, Any]]):
@@ -97,8 +95,7 @@ def basic_setitem(func):
 
 
 def normalize_slice(start, stop, step, size):
-    """
-    Normalize slice parameters.
+    """Normalize slice parameters.
 
     Args:
         start (Optional[int]): start index
@@ -178,9 +175,7 @@ class _SeqSlice(object):
 
 
 class _SharedCtypeQueue:
-    """
-    Simplified multiprocessing queue for `struct` entities.
-    """
+    """Simplified multiprocessing queue for `struct` entities."""
     def __init__(self, fmt, maxsize):
         self.fmt = fmt
         self.itemsize = struct.calcsize(fmt)
@@ -226,6 +221,3 @@ class _SharedCtypeQueue:
 
     def empty(self):
         return self.stop.value == self.start.value
-
-    def task_done(self):
-        pass

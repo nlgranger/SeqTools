@@ -31,25 +31,19 @@ logging.getLogger(__name__).addHandler(NullHandler())
 # -----------------------------------------------------------------------------
 
 class PrefetchException(RuntimeError):
-    """
-    Raised when evaluation of an item in a worker fails.
-    """
+    """Raised when evaluation of an item in a worker fails."""
     pass
 
 
 class JobStatus(IntEnum):
-    """
-    A status descriptor for evaluated jobs.
-    """
+    """A status descriptor for evaluated jobs."""
     QUEUED = 1
     DONE = 2
     FAILED = 3
 
 
 class _AsyncSequenceManager(object):
-    """
-    Wraps AsyncSequence to expose a more familiar Sequence interface.
-    """
+    """Wraps AsyncSequence to expose a more familiar Sequence interface."""
     def __init__(self, async_seq, max_cached, timeout=1., anticipate=None):
         if max_cached < 1:
             raise ValueError("cache must contain at least one slot.")
@@ -138,8 +132,7 @@ class _AsyncSequenceManager(object):
 
 
 class _AsyncSequence(object):
-    """
-    Asynchronous container with a small local buffer and multiple workers.
+    """Asynchronous container with a small local buffer and multiple workers.
 
     Items from this container must be requested by queuing a job with
     :func:`enqueue`, they will be transfered asynchronously at the
@@ -205,14 +198,11 @@ class _AsyncSequence(object):
         return len(self.sequence)
 
     def enqueue(self, item, slot):
-        """
-        Request retrieval of sequence item into given buffer slot.
-        """
+        """Request retrieval of sequence item into given buffer slot."""
         self.job_queue.put((item, slot), timeout=1)
 
     def next_completion(self):
-        """
-        Block until completion of any job.
+        """Block until completion of any job.
 
         Returns:
             (int, int, JobStatus): index of computed value, buffer slot,
@@ -225,14 +215,11 @@ class _AsyncSequence(object):
         return idx, slot, status
 
     def read_value(self, slot):
-        """
-        Return the content of the buffer at the given slot.
-        """
+        """Return the content of the buffer at the given slot."""
         return self.values_slots[slot]
 
     def read_error(self, slot):
-        """
-        Return the error that was raised while performing a job.
+        """Return the error that was raised while performing a job.
 
         Args:
             slot (int): the slot associated to the failed job.
@@ -302,8 +289,7 @@ class _AsyncSequence(object):
 def prefetch(sequence, max_buffered=None,
              nworkers=0, method='thread', timeout=1.,
              start_hook=None, anticipate=None):
-    """
-    Wrap a sequence to prefetch values before use using background workers.
+    """Wrap a sequence to prefetch values before use using background workers.
 
     This function breaks the on-demand execution principle used in this
     library but does so transparently using background workers.
@@ -378,9 +364,7 @@ def prefetch(sequence, max_buffered=None,
 
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
-    """
-    Return worker-backed sequence iterator (deprecated).
-    """
+    """Return worker-backed sequence iterator (deprecated)."""
     logger = logging.getLogger(__name__)
     logger.warning(
         "Call to deprecated function eager_iter, use prefetch instead",

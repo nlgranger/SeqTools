@@ -54,9 +54,7 @@ class Range:
 
 
 def arange(start, stop=None, step=None):
-    """
-    Sequential equivalent of Python built-in :class:`python:range`.
-    """
+    """Sequential equivalent of Python built-in :class:`python:range`."""
     return Range(start, stop, step)
 
 
@@ -123,8 +121,7 @@ class Reindexing:
 
 
 def gather(sequence, indexes):
-    """
-    Return a view on the sequence reordered by indexes.
+    """Return a view on the sequence reordered by indexes.
 
     .. image:: _static/gather.png
        :alt: gather
@@ -214,8 +211,7 @@ class InfiniteCycle:
 
 
 def cycle(sequence, limit=None):
-    """
-    Return repeated view of a sequence.
+    """Return repeated view of a sequence.
 
     Args:
         sequence (Sequence): The sequence to be repeated.
@@ -283,8 +279,7 @@ class Interleaving(object):
 
 
 def interleave(*sequences):
-    """
-    Interleave elements from several sequences into one.
+    """Interleave elements from several sequences into one.
 
     Sequences don't need to have the same length, the cycling will
     operate between whatever sequences are left.
@@ -404,8 +399,7 @@ class InfiniteRepetition(object):
 
 
 def repeat(value, times=None):
-    """
-    Make a sequence by repeating a value.
+    """Make a sequence by repeating a value.
 
     Args:
         value (Any): Value to be (virtually) replicated.

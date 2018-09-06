@@ -18,7 +18,7 @@ processing into a simple sequence wrapper.
 """
 
 from .evaluation import PrefetchException, prefetch, eager_iter
-from .buffer import add_cache, load_buffers
+from .buffering import add_cache, load_buffers
 from .indexing import arange, gather, take, reindex, cycle, interleave, repeat
 from .mapping import smap, starmap
 from .serialization import SerializableFunc

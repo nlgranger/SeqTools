@@ -4,10 +4,18 @@ import random
 import sys
 from time import time, sleep
 from numbers import Integral, Real
+import logging
 
 import pytest
 import numpy as np
 from seqtools import add_cache, smap, load_buffers, PrefetchException
+
+
+logging.basicConfig(level=logging.DEBUG)
+seed = int(random.random() * 100000)
+logging.info("random seed was %d", seed)
+# seed = 29130
+random.seed(seed)
 
 
 def test_cached():
@@ -116,9 +124,7 @@ def test_load_buffer(array_t):
     for a, b in zip(samples_1[:-10], samples_2[:-10]):
         assert len(a) == len(b)
         for f1, f2 in zip(a, b):
-            assert len(f1) == len(f2)
-            for v1, v2 in zip(f1, f2):
-                assert v1 == v2
+            assert list(f1) == list(f2)
 
     sample_iter._finalize(sample_iter)  # for coverage
 

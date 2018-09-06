@@ -47,8 +47,7 @@ class Mapping(object):
 
 
 def smap(f, *sequence):
-    """
-    Return a mapping of `f` over the sequence(s).
+    """Return a mapping of `f` over the sequence(s).
 
     Equivalent to :code:`[f(x) for x in sequence]` with on-demand evaluation.
 
@@ -94,8 +93,7 @@ def smap(f, *sequence):
 
 
 def starmap(f, sequence):
-    """
-    Map a function over a sequence of argument tuples.
+    """Map a function over a sequence of argument tuples.
 
     A sequential equivalent of :func:`python:itertools.starmap`.
     """

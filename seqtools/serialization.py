@@ -16,8 +16,7 @@ else:
 
 
 class SerializableFunc(object):
-    """
-    Decorate a function to become independent from its source file.
+    """Decorate a function to become independent from its source file.
 
     This decorator alters the serialization hook so that unpickling the
     pickled function will import a back-up of the original source code.

@@ -63,8 +63,7 @@ class Debug(object):
 
 
 def debug(sequence, func, max_calls=None, max_rate=None):
-    """
-    Wrap a sequence to trigger a function on each read.
+    """Wrap a sequence to trigger a function on each read.
 
     Args:
         sequence (Sequence):
@@ -105,16 +104,12 @@ class ThroughputMonitor(object):
         self.time_spent = 0
 
     def reset(self):
-        """
-        Reset perf counter.
-        """
+        """Reset perf counter."""
         self.n_calls = 0
         self.time_spent = 0
 
     def throughput(self):
-        """
-        Returns average measured throughput.
-        """
+        """Returns average measured throughput."""
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure throughput before any element was accessed")
@@ -122,9 +117,7 @@ class ThroughputMonitor(object):
         return self.n_calls / self.time_spent
 
     def read_delay(self):
-        """
-        Return average measured time spent accessing items.
-        """
+        """Return average measured time spent accessing items."""
         if self.n_calls == 0:
             raise RuntimeError(
                 "cannot measure read delay before any element was accessed")
@@ -170,8 +163,7 @@ class ThroughputMonitor(object):
 
 
 def monitor_throughput(sequence):
-    """
-    Wrap a sequence in an object with three additional methods:
+    """Wrap a sequence in an object with three additional methods:
 
     * :code:`read_delay` the average time it takes to read an item.
     * :code:`throughput` the invert of the above.

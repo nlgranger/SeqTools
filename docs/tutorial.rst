@@ -82,21 +82,23 @@ Indexing
 --------
 
 Most functions in this library including :func:`smap` try to preserve the
-simplicity of slice-based indexing:
+simplicity of python list indexing, that includes negative indexing and slicing
+as well:
 
 >>> l = [3, 5, 1, 4]
 >>> y = seqtools.smap(lambda x: x * 2, l)
 >>> list(y)
 [6, 10, 2, 8]
 >>> z = y[1:-1]
->>> len(z)  # z values aren't yet computed
+>>> # following seqtools on-demand logic: z values aren't yet computed
+>>> len(z)  # deduced without evaluating z
 2
 >>> list(z)
 [10, 2]
 
 Where it makes sense, transformed sequences also support index and slice based
-assignment so as to make the objects truely behave like lists. For example with
-the :func:`gather` function:
+_assignment_ so as to make the objects truely behave like lists. For example
+with the :func:`gather` function:
 
 >>> arr = [0, 1, 2, 3, 4, 5]
 >>> y = seqtools.gather(arr, [1, 1, 3, 4])
@@ -130,8 +132,8 @@ To finally compute all the values from a sequence, :func:`prefetch` provides
 an wrapper backed by multiple workers to compute the values more quickly.
 
 To see the library in practice, you can see how to write a multiprocessing
-capable minibatch iterator written in just 8 lines
-:ref:`in this example <minibatch iterator>`.
+capable minibatch iterator written in just 8 lines :ref:`in this example
+<minibatch iterator>`.
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?
