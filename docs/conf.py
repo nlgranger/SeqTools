@@ -40,7 +40,9 @@ extensions = [
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.doctest',
     'sphinx.ext.linkcode',
-    'sphinx.ext.intersphinx']
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
+    'nbsphinx']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -85,7 +87,8 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = [
+    '_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -98,7 +101,7 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
+
 try:
     import sphinx_rtd_theme
 except ImportError:
@@ -235,3 +238,8 @@ def linkcode_resolve(domain, info):
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('http://docs.scipy.org/doc/numpy', None)}
+
+
+# -- Options for nbsphinx -----------------------------------------------------
+
+nbsphinx_execute = 'auto'

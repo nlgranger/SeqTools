@@ -346,5 +346,9 @@ def add_cache(arr, cache_size=1, cache=None):
 
     Return:
         (Sequence): The sequence wrapped with a cache.
+
+    Notes:
+        The default cache is thread safe but won't help when multiple processes
+        try to use it.
     """
     return CachedSequence(arr, cache_size, cache)

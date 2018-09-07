@@ -2,6 +2,7 @@ Examples
 ========
 
 .. toctree::
-    :glob:
+    :maxdepth: 1
 
-    examples/*
+    examples/preprocessing_pipeline.ipynb
+    examples/fast_minibatch_sampling.ipynb

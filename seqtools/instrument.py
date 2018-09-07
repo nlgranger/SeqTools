@@ -165,12 +165,9 @@ class ThroughputMonitor(object):
 def monitor_throughput(sequence):
     """Wrap a sequence in an object with three additional methods:
 
-    * :code:`read_delay` the average time it takes to read an item.
-    * :code:`throughput` the invert of the above.
-    * :code:`reset` resets the accumulated statistics.
+    * :code:`read_delay()` the average time it takes to read an item.
+    * :code:`throughput()` the invert of the above.
+    * :code:`reset()` resets the accumulated statistics.
 
-    Raises:
-        ValueError: raised when quiering statistics before any measure
-            has been taken.
     """
     return ThroughputMonitor(sequence)

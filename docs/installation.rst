@@ -11,7 +11,7 @@ or from the source repository instead:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/nlgranger/LazyProc.git
+   pip install git+https://github.com/nlgranger/SeTools.git
 
 Many elements are reusable independantly, you can pick what you need directly
 from the source code at https://github.com/nlgranger/SeqTools.
