@@ -95,36 +95,33 @@ def test_load_buffer(array_t):
             self.state = multiprocessing.Value('l', 0)
 
         def __call__(self):
-            with self.state.get_lock():
+            with self.state.get_lock():  # ensure no repetition
                 v = self.state.value
                 self.state.value += 1
             sleep(random.random() * 0.01)
             return (array_t([v + i for i in range(5)]),
                     array_t([float(v + i) for i in range(5)]))
 
-    samples_1 = []
     sampler = MinibatchSampler()
-    sampler()  # consume sample
-    for i in range(100):
-        samples_1.append(sampler())
-    samples_1 = sorted(samples_1, key=lambda a: sum(a[0]))
+    sample_iter = load_buffers(sampler, max_cached=10, timeout=.1,
+                               start_hook=random.seed)
 
-    samples_2 = []
-    sample_iter = load_buffers(
-        MinibatchSampler(), max_cached=10, timeout=.1, start_hook=random.seed)
+    samples = []
     pause_n_times = 3
     for i in range(100):
         if pause_n_times > 0 and random.random() < 1 / (99 - i - pause_n_times):
             print("{} pause".format(i))
             sleep(1)
             pause_n_times -= 1
-        samples_2.append(tuple(array_t(field) for field in next(sample_iter)))
-    samples_2 = sorted(samples_2, key=lambda a: sum(a[0]))
 
-    for a, b in zip(samples_1[:-10], samples_2[:-10]):
-        assert len(a) == len(b)
-        for f1, f2 in zip(a, b):
-            assert list(f1) == list(f2)
+        a, b = next(sample_iter)
+        a, b = list(a), list(b)
+
+        assert all(a[i] == a[0] + i for i in range(5))
+        assert all(b[i] == b[0] + i for i in range(5))
+        assert a[0] < sampler.state.value
+        assert (a, b) not in samples
+        samples.append((a, b))
 
     sample_iter._finalize(sample_iter)  # for coverage
 
