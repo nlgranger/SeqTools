@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.8.3] - 2018-09-10
+### Added
+- `seqtools.arange` range-like container
+- `seqtools.load_buffers` minibatch helper
+- Less error-prone release and versionning management
+- Added better examples
+
+### Changed
+- Improved documentation
+- Refactored and hardened prefetching
+- cleared setup.py and tox.ini to use setup.cfg instead
+
+### Removed
+- Inheritance from `typing.Sequence` which was useless/confusing
+
 ## [0.8.0] - 2018-05-05
 ### Added
 - added CHANGELOG
