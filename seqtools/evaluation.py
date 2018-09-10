@@ -173,11 +173,14 @@ class _AsyncSequence(object):
         while True:  # clear job submission queue
             try:
                 obj.job_queue.get(timeout=0.05)
-            except queue.Empty:
+            except (queue.Empty, IOError, EOFError):
                 break
 
         for _ in obj.workers:
-            obj.job_queue.put((0, -1))
+            try:
+                obj.job_queue.put((0, -1))
+            except (IOError, EOFError):
+                pass
 
         for worker in obj.workers:
             worker.join()
