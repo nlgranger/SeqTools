@@ -4,6 +4,7 @@ import sys
 from collections import OrderedDict
 import queue
 import signal
+import threading
 import multiprocessing
 from multiprocessing.sharedctypes import RawArray
 import logging
@@ -301,6 +302,7 @@ class CachedSequence(object):
         self.sequence = sequence
         self.cache = OrderedDict() if cache is None else cache
         self.cache_size = cache_size
+        self.lock = threading.Lock()
 
     def __len__(self):
         return len(self.sequence)
@@ -311,20 +313,22 @@ class CachedSequence(object):
 
     @basic_getitem
     def __getitem__(self, key):
-        if key in self.cache.keys():
-            return self.cache[key]
-        else:
-            value = self.sequence[key]
-            if len(self.cache) >= self.cache_size:
-                self.cache.popitem(False)
-            self.cache[key] = value
-            return value
+        with self.lock:
+            if key in self.cache.keys():
+                return self.cache[key]
+            else:
+                value = self.sequence[key]
+                if len(self.cache) >= self.cache_size:
+                    self.cache.popitem(False)
+                self.cache[key] = value
+                return value
 
     @basic_setitem
     def __setitem__(self, key, value):
-        self.sequence[key] = value
-        if key in self.cache.keys():
-            self.cache[key] = value
+        with self.lock:
+            self.sequence[key] = value
+            if key in self.cache.keys():
+                self.cache[key] = value
 
 
 def add_cache(arr, cache_size=1, cache=None):
