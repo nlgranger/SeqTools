@@ -292,12 +292,14 @@ class _AsyncSequence(object):
 def prefetch(sequence, max_buffered=None,
              nworkers=0, method='thread', timeout=1.,
              start_hook=None, anticipate=None):
-    """Wrap a sequence to prefetch values before use using background workers.
+    """Wrap a sequence to prefetch values ahead using background workers.
 
     This function breaks the on-demand execution principle used in this
     library but does so transparently using background workers.
+    Every time an element of this container is accessed, the following ones are
+    queued for computation as well and will be available sooner when needed.
     This is ideally placed at the end of a transformation pipeline
-    when all the values must be evaluated in succession.
+    when all items must be evaluated in succession.
 
     .. image:: _static/prefetch.png
        :alt: gather

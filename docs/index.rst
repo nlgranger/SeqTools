@@ -17,29 +17,25 @@ SeqTools
    import time
 
 
-SeqTools is designed to facilitate the manipulation and transformation of
-datasets in the form of indexable sequences, that is to say python lists,
-arrays, numpy arrays, or anything that supports :code:`dataset[i]`.
-It supports many operations such as element-wise transformations, combinations,
-reordering, etc. all of which are commonly found in the preprocessing
-steps of data science projects.
+SeqTools facilitates the manipulation of datasets and the evaluation of a
+transformation pipeline. Some of the provided functionnalities include: mapping
+element-wise operations, reordering, reindexing, concatenation, joining,
+slicing, minibatching, etc...
 
-During the design and debugging stage of a transformation pipeline, it is
-convenient to have fast access to individual outputs and intermediate results.
-However, it is also convenient to manipulate the whole datasets as
-self-contained objects that can be moved around and passed to other module (for
-example to a Machine Learning training routine). This library bridges the gap
-between these two aspects by providing sequence-wide transformations with
-on-demand element-wise evaluation, it removes the transitions between
-prototyping, executing and debugging which are cumbersome and error-prone.
+To improve ease of use, SeqTools assumes that dataset are objects that implement
+a list-like `sequence <https://docs.python.org/3/glossary.html#term-sequence>`_
+interface: a container object with a length and its *elements accessible via
+indexing or slicing*. All SeqTools functions take and return objects compatible
+with this simple and convenient interface.
 
-The functions of this library are transparent to the user: they take list-like
-objects and return list-like objects with the desired transformation applied,
-but the computations actually only run for requested items when needed.
-Transformations can therefore be defined easily and tested quickly for
-individual elements. Most operations return containers that even support
-supports *slice based indexing* and assignment* so that you can forget you are
-not working with lists directly!
+Sometimes manipulating a whole dataset with transformations or combinations can
+be slow and resource intensive; a transformed dataset might not even fit into
+memory! To circumvent this issue, SeqTools implements *on-demand* execution
+under the hood, so that computations and memory resources are always kept to a
+bare minimum: accessing one element only takes the memory resources needed for
+that element (ignoring the rest of the dataset), and computations are only run
+when that element is requested. This helps to quickly define dataset-wide
+transformations and probe a few results for debugging or prototyping purposes.
 
 >>> def do(x):
 ...     print("-> computing now")
@@ -58,13 +54,20 @@ not working with lists directly!
 -> computing now
 4
 
-Because of delayed execution, intermediate values for chained transformations
-need not be computed and stored unless explicitly required, as a result:
+When comes the transition from prototyping to execution, the list-like container
+interface facilitates serial evaluation. Besides, SeqTools also provides simple
+helpers to dispatch work between multiple workers, and therefore to maximize
+execution speed and resource usage.
 
-- a full transformation pipeline is setup without delay
-- individual outputs can be computed without running unnecessary computations
-  for other items, and without storing intermediate results.
-- intermediate transformation values remain easily accessible for testing
+SeqTools originally targets data science, more precisely the preprocessing
+stages of a dataset. In particular, it is meant to connect nicely to the input
+pipeline of Machine Learning libraries. However, this project purposedly keeps a
+generic interface and only requires minimal dependencies to facilitate
+reusability. Moreover, a particular attention was given to prototyping and
+debugging usages: the code is kept concise and clear with internal documentation
+to facilitate error investigation of faulty transformation pipelines. On-demand
+execution is made as transparent as possible to users by providing
+fault-tolerant functions and insightful error reporting.
 
 
 Example
@@ -80,12 +83,12 @@ Example
 >>> def f3(x):
 ...     return sum(x) / len(x)
 ...
->>> arr = list(range(1000))
+>>> data = list(range(1000))
 
 Without delayed evaluation, defining the pipeline and reading values looks like
 so:
 
->>> tmp1 = [f1(x) for x in arr]
+>>> tmp1 = [f1(x) for x in data]
 >>> tmp2 = [f2(x) for x in tmp1]  # takes 10 seconds and a lot of memory
 >>> res = [f3(x) for x in tmp2]
 >>> print(res[2])
@@ -95,17 +98,13 @@ so:
 
 With seqtools:
 
->>> tmp1 = seqtools.smap(f1, arr)
+>>> tmp1 = seqtools.smap(f1, data)
 >>> tmp2 = seqtools.smap(f2, tmp1)
 >>> res = seqtools.smap(f3, tmp2)  # no computations so far
 >>> print(res[2])  # takes 0.01 seconds
 3.0
 >>> print(max(tmp2[2]))  # easy access to intermediate results
 3
-
-The code in SeqTool is designed to keep a low overhead and can scale to high
-throughput using multi-processing or multi-threading with background worker
-for concurrent execution.
 
 
 Batteries included!
@@ -147,7 +146,7 @@ Related libraries
 -----------------
 
 These libaries provide comparable functionalities, but for iterable containers
-only:
+only, they should plug easily above a SeqTool based preprocessing pipeline:
 
 - `torchvision.transforms
   <http://pytorch.org/docs/master/torchvision/transforms.html>`_

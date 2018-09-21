@@ -231,7 +231,7 @@ class BufferLoader(object):
 
 def load_buffers(func, max_cached=2,
                  nworkers=0, timeout=1., start_hook=None):
-    """Repetitively run `func` in workers to fill memory buffers.
+    """Repetitively run `func` in background workers to fill memory buffers.
 
     Can be used to quickly generate random minibatches of data.
 

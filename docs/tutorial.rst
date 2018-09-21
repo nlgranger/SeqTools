@@ -14,8 +14,8 @@ Simple mapping
 The most basic (and possibly the most useful) function is :func:`smap`
 which maps a function to each element of a sequence:
 
->>> l = [3, 5, 1, 4]
->>> y = seqtools.smap(lambda x: x * 2, l)
+>>> data = [3, 5, 1, 4]
+>>> y = seqtools.smap(lambda x: x * 2, data)
 >>> [y[i] for i in range(4)]
 [6, 10, 2, 8]
 
@@ -27,17 +27,12 @@ function is called:
 ...     print("processing {}".format(x))
 ...     return x * 2
 ...
->>> y1 = seqtools.smap(f, l)
+>>> y1 = seqtools.smap(f, data)
 >>> # nothing happened so far
 >>>
 >>> y1[0]  # f will be called now and specifically on item 0
 processing 3
 6
->>> y2 = [f(x) for x in l]
-processing 3
-processing 5
-processing 1
-processing 4
 
 .. note::
 
@@ -57,7 +52,7 @@ If the transformation is slow to compute and/or the sequence is large, lazy
 evaluation can dramatically reduce the delay to obtain any individual results.
 Furthermore, on can chain several transformations in a pipeline. This is
 particularly convenient when intermediate transformations are memory heavy
-because the intermediate results are stored for only one element at a time:
+because SeqTools only stores intermediate results for one element at a time:
 
 >>> def f(x):
 ...     # This intermediate result takes a lot of space...
@@ -66,10 +61,10 @@ because the intermediate results are stored for only one element at a time:
 >>> def g(x):
 ...     return sum(x) / len(x)
 ...
->>> l = list(range(2000))
+>>> data = list(range(2000))
 >>>
 >>> # construct pipeline without computing anything
->>> y1 = seqtools.smap(f, l)
+>>> y1 = seqtools.smap(f, data)
 >>> y2 = seqtools.smap(g, y1)
 >>>
 >>> # computing one of the output values only uses sizeof(float) * 10000
@@ -85,12 +80,11 @@ Most functions in this library including :func:`smap` try to preserve the
 simplicity of python list indexing, that includes negative indexing and slicing
 as well:
 
->>> l = [3, 5, 1, 4]
->>> y = seqtools.smap(lambda x: x * 2, l)
+>>> data = [3, 5, 1, 4]
+>>> y = seqtools.smap(lambda x: x * 2, data)
 >>> list(y)
 [6, 10, 2, 8]
->>> z = y[1:-1]
->>> # following seqtools on-demand logic: z values aren't yet computed
+>>> z = y[1:-1]  # on-demand slicing ⇒ z values aren't computed yet
 >>> len(z)  # deduced without evaluating z
 2
 >>> list(z)
@@ -100,15 +94,15 @@ Where it makes sense, transformed sequences also support index and slice based
 _assignment_ so as to make the objects truely behave like lists. For example
 with the :func:`gather` function:
 
->>> arr = [0, 1, 2, 3, 4, 5]
->>> y = seqtools.gather(arr, [1, 1, 3, 4])
+>>> data = [0, 1, 2, 3, 4, 5]
+>>> y = seqtools.gather(data, [1, 1, 3, 4])
 >>> list(y)
 [1, 1, 3, 4]
 >>> y[0] = -1
->>> arr
+>>> data
 [0, -1, 2, 3, 4, 5]
 >>> y[-2:] = [-3, -4]
->>> arr
+>>> data
 [0, -1, 2, -3, -4, 5]
 
 
@@ -118,9 +112,9 @@ Multivariate mapping
 Similarly to :func:`map`, if more than one sequence is passed, they are zipped
 together and fed as distinct arguments to the function:
 
->>> l1 = [3, 5, 1, 4]
->>> l2 = [4, 5, 7, 2]
->>> y = seqtools.smap(lambda x1, x2: x1 + x2, l1, l2)
+>>> data1 = [3, 5, 1, 4]
+>>> data2 = [4, 5, 7, 2]
+>>> y = seqtools.smap(lambda x1, x2: x1 + x2, data1, data2)
 >>> list(y)
 [7, 10, 8, 6]
 
