@@ -17,7 +17,8 @@ prefetch routine which hides away the difficulties of concurrent
 processing into a simple sequence wrapper.
 """
 
-from .evaluation import PrefetchException, prefetch, eager_iter
+from .evaluation import prefetch, eager_iter
+from .errors import EvaluationError, seterr
 from .buffering import add_cache, load_buffers
 from .indexing import arange, gather, take, reindex, cycle, interleave, repeat
 from .mapping import smap, starmap
@@ -27,6 +28,7 @@ from . import instrument
 
 __all__ = [
     'prefetch', 'eager_iter',
+    'EvaluationError', 'seterr',
     'add_cache', 'load_buffers',
     'arange', 'gather', 'take', 'reindex', 'cycle', 'interleave', 'repeat',
     'smap', 'starmap',

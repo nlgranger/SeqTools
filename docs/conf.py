@@ -41,7 +41,6 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.linkcode',
     'sphinx.ext.intersphinx',
-    'sphinx.ext.mathjax',
     'nbsphinx']
 
 # Add any paths that contain templates here, relative to this directory.
@@ -243,3 +242,4 @@ intersphinx_mapping = {
 # -- Options for nbsphinx -----------------------------------------------------
 
 nbsphinx_execute = 'auto'
+nbsphinx_allow_errors = True

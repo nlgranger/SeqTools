@@ -5,7 +5,14 @@ import struct
 import numbers
 import queue
 import multiprocessing
+import logging
 from multiprocessing.sharedctypes import RawArray, RawValue
+try:  # Python 2.7+
+    from logging import NullHandler
+except ImportError:
+    class NullHandler(logging.Handler):
+        def emit(self, record):
+            pass
 
 
 def isint(x):
@@ -16,6 +23,12 @@ def isint(x):
 def clip(x, a, b):
     """Clip value within specified range."""
     return max(a, min(x, b))
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.addHandler(NullHandler())
+    return logger
 
 
 def basic_getitem(func):
@@ -32,7 +45,7 @@ def basic_getitem(func):
     """
     def getitem(self, key):
         if isinstance(key, slice):
-            return _SeqSlice(self, key)
+            return SeqSlice(self, key)
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
@@ -66,7 +79,7 @@ def basic_setitem(func):
     """
     def setitem(self, key, value):
         if isinstance(key, slice):
-            slice_view = _SeqSlice(self, key)
+            slice_view = SeqSlice(self, key)
 
             if len(slice_view) != len(value):
                 raise ValueError(
@@ -138,9 +151,9 @@ def normalize_slice(start, stop, step, size):
     return start, stop, step
 
 
-class _SeqSlice(object):
+class SeqSlice(object):
     def __init__(self, sequence, key):
-        if isinstance(sequence, _SeqSlice):
+        if isinstance(sequence, SeqSlice):
             key_start, key_stop, key_step = normalize_slice(
                 key.start, key.stop, key.step, len(sequence))
             numel = abs(key_stop - key_start) // abs(key_step)
@@ -174,7 +187,7 @@ class _SeqSlice(object):
         self.sequence[self.start + key * self.step] = value
 
 
-class _SharedCtypeQueue:
+class SharedCtypeQueue:
     """Simplified multiprocessing queue for `struct` entities."""
     def __init__(self, fmt, maxsize):
         self.fmt = fmt

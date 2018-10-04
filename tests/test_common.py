@@ -2,7 +2,7 @@ import pytest
 import queue
 import multiprocessing
 import time
-from seqtools.utils import _SeqSlice, _SharedCtypeQueue
+from seqtools.utils import SeqSlice, SharedCtypeQueue
 
 
 def test_slice():
@@ -17,17 +17,17 @@ def test_slice():
         slice(250, -125, -1)]
 
     for k in keys:
-        v = _SeqSlice(arr, k)
+        v = SeqSlice(arr, k)
         assert list(v) == arr[k]
         assert list(iter(v)) == arr[k]
         assert [v[i] for i in range(len(v))] == arr[k]
 
-    v = _SeqSlice(arr, slice(3, -25, 4))[14:1:-2]
+    v = SeqSlice(arr, slice(3, -25, 4))[14:1:-2]
     assert list(v) == arr[3:-25:4][14:1:-2]
     assert id(v.sequence) == id(arr)
 
     arr2 = list(arr)
-    v = _SeqSlice(arr2, slice(25, 37, 3))
+    v = SeqSlice(arr2, slice(25, 37, 3))
     v[1] = -1
     assert arr2[:28] == arr[:28]
     assert arr2[28] == -1
@@ -35,7 +35,7 @@ def test_slice():
 
     arr2 = list(arr)
     arr3 = list(arr)
-    v = _SeqSlice(arr2, slice(25, 37, 3))
+    v = SeqSlice(arr2, slice(25, 37, 3))
     v[1:-1] = [-1, -2]
     arr3[28:34:3] = [-1, -2]
     assert arr2 == arr3
@@ -46,7 +46,7 @@ def test_sharedctypesqueue():
     fmt = "iii"
 
     # basic read/write
-    q = _SharedCtypeQueue(fmt, 10)
+    q = SharedCtypeQueue(fmt, 10)
     for i in range(10):
         q.put((i, i, i))
     for i in range(10):

@@ -7,21 +7,22 @@ import signal
 import threading
 import multiprocessing
 from multiprocessing.sharedctypes import RawArray
-import logging
 try:
     from weakref import finalize
 except ImportError:
     from backports.weakref import finalize
 
 import tblib
-from future.utils import raise_from, raise_with_traceback
+from future.utils import raise_from
 try:
     import numpy as np
 except ImportError:
     np = None
 
-from .utils import basic_getitem, basic_setitem
-from .evaluation import JobStatus, PrefetchException
+from .utils import basic_getitem, basic_setitem, get_logger
+from .evaluation import JobStatus
+from .errors import EvaluationError, format_stack, with_traceback, \
+    seterr, passthrough
 
 
 # -----------------------------------------------------------------------------
@@ -83,6 +84,7 @@ class BufferLoader(object):
         self.n_workers = nworkers
         self.timeout = timeout
         self.start_hook = start_hook
+        self.stack = format_stack(2)
 
         # prepare buffers
         sample = func()  # TODO: save this value
@@ -155,35 +157,42 @@ class BufferLoader(object):
         return self
 
     def __next__(self):
+        # assume last job is consumed, enqueue new one
         self.job_queue.put(self.next_in_queue)
         done_slot, status = self.done_queue.get()
 
-        while done_slot < 0:
+        # wait for job completion
+        while done_slot < 0:  # worker went to sleep
             self._start_worker(-done_slot - 1)
             done_slot, status = self.done_queue.get()
 
         self.next_in_queue = done_slot
-        if status == JobStatus.FAILED:
-            msg = "Error while executing {}".format(self.generate)
-            error, trace_dump = self.job_errors[done_slot]
-            if error is not None:
-                try:
-                    raise_with_traceback(error, trace_dump.as_traceback())
-                except Exception as cause:
-                    raise_from(PrefetchException(msg), cause)
-            else:
-                raise PrefetchException(msg)
 
-        else:
+        # return result
+        if status == JobStatus.DONE:
             return self.value_slots[done_slot]
+
+        else:  # deal with error
+            msg = "Failed to evaluate {} in {} created at:\n{}".format(
+                self.generate, self.__class__.__name__, self.stack)
+            cause, trace_dump = self.job_errors[done_slot]
+            if cause is None:
+                raise EvaluationError(msg)
+            else:
+                cause = with_traceback(cause, trace_dump.as_traceback())
+                if passthrough() or isinstance(cause, EvaluationError):
+                    raise cause
+                else:
+                    raise_from(EvaluationError(msg), cause)
 
     next = __next__
 
     @staticmethod
     def target(pid, func, value_slots, error_slots,
                job_queue, done_queue, timeout, start_hook):
-        logger = logging.getLogger(__name__)
+        logger = get_logger(__name__)
 
+        seterr(evaluation='passthrough')
         if start_hook is not None:
             start_hook()
 
@@ -254,8 +263,7 @@ def load_buffers(func, max_cached=2,
 
     Return:
         Iterator[Tuple]: An iterator on buffer slots updated with the outputs
-            of `func`. Iterating raises :class:`PrefetchException` instead of
-            returning a value when `func` raises an error.
+            of `func`.
 
     Notes:
         - The shapes and types of `func` outputs must remain consistent

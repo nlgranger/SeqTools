@@ -3,7 +3,7 @@ import logging
 from time import sleep, time
 import pytest
 
-from seqtools import smap, prefetch, PrefetchException
+from seqtools import smap, prefetch, EvaluationError, seterr
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -71,32 +71,34 @@ def test_prefetch_timing(method):
         sleep(.02 + 0.01 * (random.random() - .5))
         return x
 
-    arr = list(range(421))
+    arr = list(range(420))
     y = smap(f1, arr)
     y = prefetch(y, nworkers=2, max_buffered=20, method=method, timeout=1)
 
     for i in range(20):
         y[i]  # consume first items to eliminate worker startup time
     t1 = time()
-    for i in range(20, 421):
+    for i in range(20, 420):
         y[i]
     t2 = time()
 
     duration = t2 - t1
     print("test_prefetch_timing({}) {:.2f}s".format(method, duration))
 
-    assert duration < 4.3
+    assert duration < 4.5
 
 
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize("method", ["thread", "process"])
-def test_prefetch_errors(method):
+@pytest.mark.parametrize("evaluation", ["wrap", "passthrough"])
+@pytest.mark.parametrize("picklable_err", [False, True])
+def test_prefetch_errors(method, evaluation, picklable_err):
     class CustomError(Exception):
         pass
 
     def f1(x):
         if x is None:
-            raise CustomError()
+            raise ValueError("blablabla") if picklable_err else CustomError()
         else:
             return x
 
@@ -104,31 +106,14 @@ def test_prefetch_errors(method):
     arr2 = smap(f1, arr1)
     y = prefetch(arr2, nworkers=2, max_buffered=2, method=method)
 
-    for i in range(3):
-        assert y[i] == arr1[i]
-    with pytest.raises(PrefetchException):
-        a = y[3]
-        del a
-
-    def f2(x):
-        if x is None:
-            raise ValueError("blablabla")
-        else:
-            return x
-
-    arr2 = smap(f2, arr1)
-    y = prefetch(arr2, nworkers=2, max_buffered=2, method=method)
-
-    for i in range(3):
-        assert y[i] == arr1[i]
-    try:
-        a = y[3]
-        del a
-    except Exception as e:
-        assert isinstance(e, PrefetchException)
-        assert isinstance(e.__cause__, ValueError)
+    seterr(evaluation)
+    if (method == "process" and not picklable_err) or evaluation == "wrap":
+        error_t = EvaluationError
     else:
-        assert False
+        error_t = ValueError if picklable_err else CustomError
 
-    assert y[0] == 1
-    assert y[1] == 2
+    for i in range(3):
+        assert y[i] == arr1[i]
+    with pytest.raises(error_t):
+        a = y[3]
+        del a

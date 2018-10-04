@@ -2,13 +2,13 @@ from numbers import Integral
 import itertools
 import bisect
 from array import array
-import logging
 from future.builtins import range
 
-from .utils import isint, basic_getitem, basic_setitem, normalize_slice
+from .utils import isint, basic_getitem, basic_setitem, normalize_slice, \
+    get_logger
 
 
-class Range:
+class Arange:
     def __init__(self, start, stop=None, step=None):
         if stop is None and step is None:
             stop = start
@@ -43,7 +43,7 @@ class Range:
             step = self.step * step
             stop = start + step * numel
 
-            return Range(start, stop, step)
+            return Arange(start, stop, step)
 
         elif not isinstance(key, Integral):
             raise TypeError(
@@ -55,12 +55,12 @@ class Range:
 
 def arange(start, stop=None, step=None):
     """Sequential equivalent of Python built-in :class:`python:range`."""
-    return Range(start, stop, step)
+    return Arange(start, stop, step)
 
 
-class Reindexing:
+class Gathering(object):
     def __init__(self, sequence, indexes):
-        if isinstance(sequence, Reindexing):  # optimize nested subsets
+        if isinstance(sequence, Gathering):  # optimize nested subsets
             indexes = array('l', (sequence.indexes[i] for i in indexes))
             sequence = sequence.sequence
 
@@ -76,7 +76,7 @@ class Reindexing:
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            return Reindexing(self.sequence, self.indexes[key])
+            return gather(self.sequence, self.indexes[key])
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
@@ -128,20 +128,21 @@ def gather(sequence, indexes):
        :width: 15%
        :align: center
     """
-    return Reindexing(sequence, indexes)
+    return Gathering(sequence, indexes)
 
 
 def take(sequence, indexes):
     """Alias for :func:`seqtools.gather`."""
-    return Reindexing(sequence, indexes)
+    return gather(sequence, indexes)
 
 
 def reindex(sequence, indexes):
-    logging.warning(
+    logger = get_logger(__name__)
+    logger.warning(
         "Call to deprecated function reindex, use gather instead",
         category=DeprecationWarning,
         stacklevel=2)
-    return Reindexing(sequence, indexes)
+    return gather(sequence, indexes)
 
 
 class Cycle:

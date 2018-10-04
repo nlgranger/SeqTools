@@ -61,7 +61,8 @@ def test_batching():
 
     chunked = batch(arr, 5, pad=0, collate_fn=list)
     chunked[:1] = [[-1, -2, -3, -4, -5]]
-    assert arr == [-1, -2, -3, -4, -5] + list(range(5, 137))
+    chunked[-1] = [-135, -136]
+    assert arr == [-1, -2, -3, -4, -5] + list(range(5, 135)) + [-135, -136]
 
 
 def test_split():

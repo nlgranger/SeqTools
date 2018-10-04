@@ -11,22 +11,25 @@ API Reference
 .. autosummary::
    :nosignatures:
 
-   add_cache
-   batch
-   collate
-   concatenate
-   cycle
+   smap
+   starmap
    arange
    gather
    take
+   concatenate
+   collate
    interleave
+   cycle
+   repeat
+   batch
+   unbatch
+   split
+   add_cache
    prefetch
    load_buffers
-   repeat
-   smap
-   split
-   starmap
-   unbatch
+   SerializableFunc
+   EvaluationError
+   seterr
 
 
 Mapping
@@ -64,7 +67,9 @@ Evaluation and buffering
 Errors
 ------
 
-.. autoclass:: PrefetchException
+.. autoclass:: EvaluationError
+
+.. autofunction:: seterr
 
 
 Tools

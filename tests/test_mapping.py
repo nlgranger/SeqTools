@@ -1,6 +1,6 @@
 import random
 import pytest
-from seqtools import smap, starmap
+from seqtools import smap, starmap, EvaluationError, seterr
 
 
 def test_smap_basics():
@@ -27,17 +27,22 @@ class CustomException(Exception):
     pass
 
 
-def test_smap_exceptions():
+@pytest.mark.parametrize('evaluation', ['wrap', 'passthrough'])
+def test_smap_exceptions(evaluation):
     def do(x):
         del x
         raise CustomException
 
     data = [random.random() for _ in range(100)]
     m = smap(do, data)
-    with pytest.raises(CustomException):
+
+    seterr(evaluation)
+    error_t = EvaluationError if evaluation == "wrap" else CustomException
+
+    with pytest.raises(error_t):
         print(m[0])
 
-    with pytest.raises(CustomException):
+    with pytest.raises(error_t):
         next(iter(m))
 
     with pytest.raises(TypeError):

@@ -8,31 +8,21 @@ import threading
 import signal
 import queue
 from enum import IntEnum
-import logging
-try:  # Python 2.7+
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
+
 try:
     from weakref import finalize
 except ImportError:
     from backports.weakref import finalize
 
 import tblib
-from future.utils import raise_from, raise_with_traceback
+from future.utils import raise_from
 
-from .utils import isint, _SharedCtypeQueue
-
-logging.getLogger(__name__).addHandler(NullHandler())
+from .utils import isint, SharedCtypeQueue, get_logger
+from .errors import EvaluationError, format_stack, with_traceback, \
+    passthrough, seterr
 
 
 # -----------------------------------------------------------------------------
-
-class PrefetchException(RuntimeError):
-    """Raised when evaluation of an item in a worker fails."""
-    pass
 
 
 class JobStatus(IntEnum):
@@ -42,11 +32,15 @@ class JobStatus(IntEnum):
     FAILED = 3
 
 
-class _AsyncSequenceManager(object):
-    """Wraps AsyncSequence to expose a more familiar Sequence interface."""
+class PrefetchedSequence(object):
+    """Wraps :class:`AsyncSequence` to expose a more familiar
+    :class:`python:Sequence` interface.
+    """
     def __init__(self, async_seq, max_cached, timeout=1., anticipate=None):
         if max_cached < 1:
             raise ValueError("cache must contain at least one slot.")
+
+        self.creation_stack = format_stack(2)
 
         self.async_seq = async_seq
         self.max_cached = max_cached
@@ -114,12 +108,18 @@ class _AsyncSequenceManager(object):
 
         # handle errors
         if self.status[self.first_slot] == JobStatus.FAILED:
-            msg = "failed to get item {}".format(self.todo[self.first_slot])
+            msg = "failed to prefetch item {} in {} created at:\n{}".format(
+                self.todo[self.first_slot],
+                self.__class__.__name__,
+                self.creation_stack)
             cause = self.async_seq.read_error(self.first_slot)
             if cause is not None:
-                raise_from(PrefetchException(msg), cause)
+                if passthrough() or isinstance(cause, EvaluationError):
+                    raise cause
+                else:
+                    raise_from(EvaluationError(msg), cause)
             else:
-                raise PrefetchException(msg)
+                raise EvaluationError(msg)
 
         else:  # or return buffer slot
             out = self.async_seq.read_value(self.first_slot)
@@ -131,7 +131,7 @@ class _AsyncSequenceManager(object):
         self.status[slot] = JobStatus.QUEUED
 
 
-class _AsyncSequence(object):
+class AsyncSequence(object):
     """Asynchronous container with a small local buffer and multiple workers.
 
     Items from this container must be requested by queuing a job with
@@ -166,7 +166,7 @@ class _AsyncSequence(object):
             self._start_worker(i)
 
         # ensure clean termination in any situation
-        finalize(self, _AsyncSequence._finalize, self)
+        finalize(self, AsyncSequence._finalize, self)
 
     @staticmethod
     def _finalize(obj):
@@ -234,18 +234,16 @@ class _AsyncSequence(object):
         self.errors_slots[slot] = (None, None)
 
         if error is not None:
-            try:
-                raise_with_traceback(error, trace_dump.as_traceback())
-            except Exception as error:
-                return error
+            return with_traceback(error, trace_dump.as_traceback())
         else:
             return None
 
     @staticmethod
     def _target(pid, sequence, value_slots, error_slots, job_queue, done_queue,
                 timeout, start_hook):
-        logger = logging.getLogger(__name__)
+        logger = get_logger(__name__)
 
+        seterr(evaluation='passthrough')
         if start_hook is not None:
             start_hook()
 
@@ -289,7 +287,7 @@ class _AsyncSequence(object):
                 return
 
 
-def prefetch(sequence, max_buffered=None,
+def prefetch(sequence, max_buffered,
              nworkers=0, method='thread', timeout=1.,
              start_hook=None, anticipate=None):
     """Wrap a sequence to prefetch values ahead using background workers.
@@ -337,9 +335,6 @@ def prefetch(sequence, max_buffered=None,
 
     Returns:
         Sequence: The wrapped sequence.
-
-    Raises:
-        PrefetchException: on error while reading item from `sequence`
     """
     if method == "thread":
         job_queue = queue.Queue(maxsize=max_buffered + nworkers)
@@ -347,22 +342,22 @@ def prefetch(sequence, max_buffered=None,
         values_cache = [None] * max_buffered
         errors_cache = [None] * max_buffered
         worker_t = threading.Thread
-        async_seq = _AsyncSequence(
+        async_seq = AsyncSequence(
             sequence, job_queue, done_queue, values_cache, errors_cache,
             worker_t, nworkers, timeout, start_hook)
-        return _AsyncSequenceManager(
+        return PrefetchedSequence(
             async_seq, max_buffered, timeout, anticipate)
     elif method in ("process", "proc"):
-        job_queue = _SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
-        done_queue = _SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
+        job_queue = SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
+        done_queue = SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
         manager = multiprocessing.Manager()
         values_cache = manager.list([None] * max_buffered)
         errors_cache = manager.list([None, None] * max_buffered)
         worker_t = multiprocessing.Process
-        async_seq = _AsyncSequence(
+        async_seq = AsyncSequence(
             sequence, job_queue, done_queue, values_cache, errors_cache,
             worker_t, nworkers, timeout, start_hook)
-        return _AsyncSequenceManager(
+        return PrefetchedSequence(
             async_seq, max_buffered, timeout, anticipate)
     else:
         raise ValueError("unsupported method")
@@ -370,7 +365,7 @@ def prefetch(sequence, max_buffered=None,
 
 def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
     """Return worker-backed sequence iterator (deprecated)."""
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.warning(
         "Call to deprecated function eager_iter, use prefetch instead",
         category=DeprecationWarning,

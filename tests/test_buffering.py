@@ -8,7 +8,8 @@ import logging
 
 import pytest
 import numpy as np
-from seqtools import add_cache, smap, load_buffers, PrefetchException
+from seqtools import add_cache, smap, load_buffers, \
+    EvaluationError, seterr
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -105,6 +106,7 @@ def test_load_buffer(array_t):
     sampler = MinibatchSampler()
     sample_iter = load_buffers(sampler, max_cached=10, timeout=.1,
                                start_hook=random.seed)
+    sample_iter = iter(sample_iter)  # useless, for coverage only
 
     samples = []
     pause_n_times = 3
@@ -126,7 +128,8 @@ def test_load_buffer(array_t):
     sample_iter._finalize(sample_iter)  # for coverage
 
 
-def test_load_buffer_errors():
+@pytest.mark.parametrize("evaluation", ['wrap', 'passthrough'])
+def test_load_buffer_errors(evaluation):
     class MinibatchSampler:
         def __init__(self):
             self.state = multiprocessing.Value('l', 0)
@@ -141,13 +144,12 @@ def test_load_buffer_errors():
                    np.array([float(v + i) for i in range(5)]))
             return out
 
+    seterr(evaluation=evaluation)
+
     it = load_buffers(MinibatchSampler(), nworkers=1)
     for _ in range(4):
         next(it)
 
-    try:
+    error_t = EvaluationError if evaluation == 'wrap' else ValueError
+    with pytest.raises(error_t):
         next(it)
-    except PrefetchException as error:
-        assert isinstance(error.__cause__, ValueError)
-    else:
-        raise AssertionError("should have failed")

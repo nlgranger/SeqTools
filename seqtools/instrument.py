@@ -163,11 +163,13 @@ class ThroughputMonitor(object):
 
 
 def monitor_throughput(sequence):
-    """Wrap a sequence in an object with three additional methods:
+    """Wrap sequence to monitor throughput.
 
-    * :code:`read_delay()` the average time it takes to read an item.
-    * :code:`throughput()` the invert of the above.
-    * :code:`reset()` resets the accumulated statistics.
+    Returns an sequence with three methods:
+
+    - :code:`read_delay()` the average time it takes to read an item.
+    - :code:`throughput()` the invert of the above.
+    - :code:`reset()` resets the accumulated statistics.
 
     """
     return ThroughputMonitor(sequence)

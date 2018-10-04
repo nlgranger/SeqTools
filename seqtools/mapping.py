@@ -1,16 +1,11 @@
-import inspect
-
 from future.utils import raise_from
 
 from .utils import basic_getitem
-
-
-class MappingException(Exception):
-    pass
+from .errors import EvaluationError, format_stack, passthrough
 
 
 class Mapping(object):
-    def __init__(self, f, sequences, debug_msg=None):
+    def __init__(self, f, *sequences):
         if not callable(f):
             raise TypeError("f must be callable")
         if len(sequences) <= 0:
@@ -18,35 +13,41 @@ class Mapping(object):
 
         self.sequences = sequences
         self.f = f
-        self.debug_msg = debug_msg
+        self.stack = format_stack(2)
 
     def __len__(self):
         return len(self.sequences[0])
 
     def __iter__(self):
-        for args in zip(*self.sequences):
-            try:
+        i = 0
+        try:
+            for args in zip(*self.sequences):
                 yield self.f(*args)
+                i += 1
 
-            except Exception as error:
-                if self.debug_msg is not None:
-                    raise_from(error, MappingException(self.debug_msg))
-                else:
-                    raise
+        except Exception as error:
+            if passthrough() or isinstance(error, EvaluationError):
+                raise
+            else:
+                msg = "Failed to evaluate item {} in {} created at:\n{}".format(
+                    i, self.__class__.__name__, self.stack)
+                raise_from(EvaluationError(msg), error)
 
     @basic_getitem
     def __getitem__(self, item):
         try:
             return self.f(*(l[item] for l in self.sequences))
 
-        except Exception as error:
-            if self.debug_msg is not None:
-                raise_from(error, MappingException(self.debug_msg))
-            else:
+        except Exception as cause:
+            if passthrough() or isinstance(cause, EvaluationError):
                 raise
+            else:
+                msg = "Failed to evaluate item {} in {} created at:\n{}".format(
+                    item, self.__class__.__name__, self.stack)
+                raise_from(EvaluationError(msg), cause)
 
 
-def smap(f, *sequence):
+def smap(f, *sequences):
     """Return a mapping of `f` over the sequence(s).
 
     Equivalent to :code:`[f(x) for x in sequence]` with on-demand evaluation.
@@ -81,15 +82,7 @@ def smap(f, *sequence):
         computing now
         [5, 5, 5, 5]
     """
-    stack = [(file, line, func, ctx[0].strip('\n') if ctx else '?')
-             for _, file, line, func, ctx, _
-             in inspect.stack()]
-    stack = stack[1:11][::-1]
-    debug_msg = "in smap created at:\n"
-    debug_msg += "\n".join("  File \"{}\", line {}, in {}\n    {}".format(*l)
-                           for l in stack)
-
-    return Mapping(f, sequence, debug_msg)
+    return Mapping(f, *sequences)
 
 
 def starmap(f, sequence):

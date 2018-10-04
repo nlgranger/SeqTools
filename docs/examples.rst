@@ -6,3 +6,4 @@ Examples
 
     examples/preprocessing_pipeline.ipynb
     examples/fast_minibatch_sampling.ipynb
+    examples/errors_and_debugging.ipynb

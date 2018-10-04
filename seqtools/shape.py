@@ -2,16 +2,15 @@
 
 import array
 import bisect
-from logging import warning
 import itertools
 try:
     from itertools import izip as zip  # pylint: disable=redefined-builtin
 except ImportError:
     pass
-from .utils import isint, clip, basic_getitem, basic_setitem
+from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
 
 
-class _Collation(object):
+class Collation(object):
     def __init__(self, sequences):
         self.sequences = sequences
 
@@ -53,14 +52,14 @@ def collate(sequences):
         >>> arr[2]
         (3, 'c', 7)
     """
-    return _Collation(sequences)
+    return Collation(sequences)
 
 
-class _Concatenation(object):
+class Concatenation(object):
     def __init__(self, sequences):
         self.sequences = []
         for seq in sequences:
-            if isinstance(seq, _Concatenation):
+            if isinstance(seq, Concatenation):
                 for subseq in seq.sequences:
                     self.sequences.append(subseq)
             else:
@@ -100,10 +99,10 @@ def concatenate(sequences):
        :width: 25%
        :align: center
     """
-    return _Concatenation(sequences)
+    return Concatenation(sequences)
 
 
-class _BatchView(object):
+class BatchView(object):
     def __init__(self, sequence, batch_size,
                  drop_last=False, pad=None, collate_fn=None):
         self.sequence = sequence
@@ -113,7 +112,8 @@ class _BatchView(object):
         self.collate_fn = collate_fn
 
         if drop_last and pad is not None:
-            warning("pad value is ignored because drop_last is true")
+            logger = get_logger(__name__)
+            logger.warning("pad value is ignored because drop_last is true")
 
     def __len__(self):
         extra = len(self.sequence) % self.batch_size > 0 and not self.drop_last
@@ -186,10 +186,10 @@ def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
         Sequence: A sequence of batches.
 
     """
-    return _BatchView(sequence, k, drop_last, pad, collate_fn)
+    return BatchView(sequence, k, drop_last, pad, collate_fn)
 
 
-class _Unbatching(object):
+class Unbatching(object):
     def __init__(self, sequence, batch_size, last_batch_size=0):
         self.sequence = sequence
         self.batch_size = batch_size
@@ -224,10 +224,10 @@ def unbatch(sequence, batch_size, last_batch_size=None):
         Sequence: The concatenation of all batches in `sequence`.
 
     """
-    return _Unbatching(sequence, batch_size, last_batch_size)
+    return Unbatching(sequence, batch_size, last_batch_size)
 
 
-class _Split(object):
+class Split(object):
     def __init__(self, sequence, edges):
         size = len(sequence)
 
@@ -304,4 +304,4 @@ def split(sequence, edges):
         Sequence: A sequence of subsequences split accordingly.
 
     """
-    return _Split(sequence, edges)
+    return Split(sequence, edges)
