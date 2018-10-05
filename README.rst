@@ -27,11 +27,13 @@ with this simple and convenient interface.
 Sometimes manipulating a whole dataset with transformations or combinations can
 be slow and resource intensive; a transformed dataset might not even fit into
 memory! To circumvent this issue, SeqTools implements *on-demand* execution
-under the hood, so that computations and memory resources are always kept to a
-bare minimum: accessing one element only takes the memory resources needed for
-that element (ignoring the rest of the dataset), and computations are only run
-when that element is requested. This helps to quickly define dataset-wide
-transformations and probe a few results for debugging or prototyping purposes.
+under the hood, so that computations are only run when needed, and only for
+actually required elements while ignoring the rest of the dataset. This helps to
+keep memory resources down to a bare minimum and accelerate the time it take to
+access any arbitrary result. This on-demand strategy helps to quickly define
+dataset-wide transformations and probe a few results for debugging or
+prototyping purposes, yet it is transparent for the users who still benefit from
+a simple and convenient list-like interface.
 
 >>> def do(x):
 ...     print("-> computing now")
@@ -52,18 +54,19 @@ transformations and probe a few results for debugging or prototyping purposes.
 
 When comes the transition from prototyping to execution, the list-like container
 interface facilitates serial evaluation. Besides, SeqTools also provides simple
-helpers to dispatch work between multiple workers, and therefore to maximize
-execution speed and resource usage.
+helpers to dispatch work between multiple background workers (threads or
+processes), and therefore to maximize execution speed and resource usage.
 
 SeqTools originally targets data science, more precisely the preprocessing
-stages of a dataset. In particular, it is meant to connect nicely to the input
-pipeline of Machine Learning libraries. However, this project purposedly keeps a
-generic interface and only requires minimal dependencies to facilitate
-reusability. Moreover, a particular attention was given to prototyping and
-debugging usages: the code is kept concise and clear with internal documentation
-to facilitate error investigation of faulty transformation pipelines. On-demand
-execution is made as transparent as possible to users by providing
-fault-tolerant functions and insightful error reporting.
+stages of a dataset. Being aware of the experimental nature of this usage,
+on-demand execution is made as transparent as possible to users by providing
+fault-tolerant functions and insightful error reporting. Moreover, internal code
+is kept concise and clear with comments to facilitate error tracing through a
+failing transformation pipeline.
+
+The library should connect nicely to the input pipeline of Machine Learning
+libraries. Nevertheless, this project purposedly keeps a generic interface and
+only requires minimal dependencies in order to facilitate reusability.
 
 
 Example
