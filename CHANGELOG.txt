@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2018-09-10
+### Added
+- improved documention
+
+### Changed
+- changed user-code error reporting (more idiomatic)
+
 ## [0.8.3] - 2018-09-10
 ### Added
 - `seqtools.arange` range-like container
