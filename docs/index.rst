@@ -142,7 +142,9 @@ The library comes with a set of functions to manipulate sequences:
 | |prefetch|         | |interleaving|
 ==================== ================= ===============
 
-... and others (suggestions are also welcome).
+and others (suggestions are also welcome). Please use the `issue tracker
+<https://github.com/nlgranger/SeqTools/issues>`_ to request features, propose
+improvements or report issues.
 
 
 Related libraries

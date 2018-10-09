@@ -1,14 +1,21 @@
 .. image:: https://badge.fury.io/py/seqtools.svg
    :target: https://badge.fury.io/py/seqtools
+   :alt: PyPi package
 .. image:: https://travis-ci.org/nlgranger/SeqTools.svg?branch=master
    :target: https://travis-ci.org/nlgranger/SeqTools
+   :alt: Continuous integration
 .. image:: https://readthedocs.org/projects/seqtools-doc/badge
    :target: http://seqtools-doc.readthedocs.io
+   :alt: Documentation
 .. image:: https://api.codacy.com/project/badge/Grade/f5324dc1e36d46f7ae1cabaaf6bce263
    :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Grade
+   :alt: Code quality analysis
 .. image:: https://codecov.io/gh/nlgranger/SeqTools/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/nlgranger/SeqTools
-
+   :alt: Tests coverage
+.. image:: http://joss.theoj.org/papers/527a3c6e78ef0b31f93bbd29235d5a0b/status.svg
+   :target: http://joss.theoj.org/papers/527a3c6e78ef0b31f93bbd29235d5a0b
+   :alt: Citable paper
 
 SeqTools
 ========
@@ -138,7 +145,9 @@ The library comes with a set of functions to manipulate sequences:
 | |prefetch|         | |interleaving|
 ==================== ================= ===============
 
-... and others (suggestions are also welcome).
+and others (suggestions are also welcome). Please use the `issue tracker
+<https://github.com/nlgranger/SeqTools/issues>`_ to request features, propose
+improvements or report issues.
 
 
 Installation
@@ -152,7 +161,10 @@ Installation
 Documentation
 -------------
 
-The documentation is hosted at https://seqtools-doc.readthedocs.io
+The documentation is hosted at `https://seqtools-doc.readthedocs.io
+<https://seqtools-doc.readthedocs.io>`_. For questions regarding usage, please
+send us an `email <mailto:3764009+nlgranger@users.noreply.github.com>`_.
+
 
 
 Related libraries
