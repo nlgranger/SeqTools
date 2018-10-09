@@ -1,23 +1,24 @@
 ---
 title: 'SeqTools: A python package for easy transformation, combination and evaluation of large datasets.'
 tags:
-  - python
   - pre-processing
   - pipeline
   - dataset
   - machine learning
   - lazy evaluation
+  - on-demand
 authors:
  - name: Nicolas Granger
    orcid: 0000-0003-2943-9888
    affiliation: "1"
  - name: Mounîm A. El Yacoubi
-   orcid: 0000-0000-0000-0000
+   orcid: 0000-0002-7383-0588
    affiliation: "1"
 affiliations:
  - name: Télécom SudParis
    index: 1
-date: 5 October 2018
+date: 9 October 2018
+bibliography: paper.bib
 ---
 
 
@@ -58,8 +59,26 @@ fault-tolerant functions and insightful error reporting. Moreover, internal code
 is kept concise and clear with comments to facilitate error tracing through a
 failing transformation pipeline.
 
-The library should connect nicely to the input pipeline of Machine Learning
-libraries. Nevertheless, this project purposedly keeps a generic interface and
-only requires minimal dependencies in order to facilitate reusability.
+Nevertheless, this project purposedly keeps a generic interface and only
+requires minimal dependencies in order to facilitate reusability beyond this
+scope of application.
+
+# Related Work
+
+[Joblib](https://joblib.readthedocs.io), proposes low-level functions with many
+optimization settings to optimize pipelined transformations. This library
+notably provides advanced caching mechanisms which are not the primary concern
+of ``SeqTool``. ``SeqTool`` uses a simpler container-oriented interface with
+multiple utility functions in order to assist fast prototyping. On-demand
+evaluation is its default behaviour and applies at all layers of a
+transformation pipeline. In particular, parallel evaluation can be inserted in
+the middle of the transformation pipeline and won't block the execution to wait
+for the computation of all elements from the dataset.
+
+``SeqTools`` is conceived to connect nicely to the data loading pipeline of
+Machine Learning libraries such as [@paszke2017automatic] or
+[@tensorflow2015-whitepaper]. The interface of these libraries focuses on
+iterators to access transformed elements, contary to ``SeqTools`` which also
+provides arbitrary reads via indexing.
 
 # References
