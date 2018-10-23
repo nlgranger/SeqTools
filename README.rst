@@ -145,9 +145,7 @@ The library comes with a set of functions to manipulate sequences:
 | |prefetch|         | |interleaving|
 ==================== ================= ===============
 
-and others (suggestions are also welcome). Please use the `issue tracker
-<https://github.com/nlgranger/SeqTools/issues>`_ to request features, propose
-improvements or report issues.
+and others (suggestions are also welcome).
 
 
 Installation
@@ -162,9 +160,16 @@ Documentation
 -------------
 
 The documentation is hosted at `https://seqtools-doc.readthedocs.io
-<https://seqtools-doc.readthedocs.io>`_. For questions regarding usage, please
-send us an `email <mailto:3764009+nlgranger@users.noreply.github.com>`_.
+<https://seqtools-doc.readthedocs.io>`_.
 
+
+Contributing and Support
+------------------------
+
+Use the `issue tracker <https://github.com/nlgranger/SeqTools/issues>`_
+to request features, propose improvements or report issues. For questions
+regarding usage, please send an `email
+<mailto:3764009+nlgranger@users.noreply.github.com>`_.
 
 
 Related libraries
