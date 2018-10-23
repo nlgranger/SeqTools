@@ -46,6 +46,9 @@ error_config = ErrorConfig()
 # Helpers ---------------------------------------------------------------------
 
 def unindent(lines):
+    if lines is None:
+        return []
+
     prefix = lines[0]
     while len(prefix) > 0 and not prefix.isspace():
         prefix = prefix[:-1]
