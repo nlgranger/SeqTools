@@ -207,7 +207,7 @@ class AsyncSequence(object):
     def next_completion(self):
         """Block until completion of any job.
 
-        Returns:
+        Return:
             (int, int, JobStatus): index of computed value, buffer slot,
             and job status.
         """
@@ -226,7 +226,7 @@ class AsyncSequence(object):
 
         Args:
             slot (int): the slot associated to the failed job.
-        Returns:
+        Return:
              Optional[Exception]: the exception object or `None` if it
              could not be retrieved.
         """

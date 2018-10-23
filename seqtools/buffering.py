@@ -262,8 +262,8 @@ def load_buffers(func, max_cached=2,
             :func:`python:random.seed`.
 
     Return:
-        Iterator[Tuple]: An iterator on buffer slots updated with the outputs
-            of `func`.
+        Iterator[Tuple]:
+            An iterator on buffer slots updated with the outputs of `func`.
 
     Notes:
         - The shapes and types of `func` outputs must remain consistent
@@ -358,5 +358,26 @@ def add_cache(arr, cache_size=1, cache=None):
     Notes:
         The default cache is thread safe but won't help when multiple processes
         try to use it.
+
+    Example:
+
+        >>> def process(x):
+        ...     print("working")
+        ...     return x * 2
+        >>>
+        >>> data = [0, 1, 2, 3, 4, 5, 6]
+        >>> result = seqtools.smap(process, data)
+        >>> cached = seqtools.add_cache(result)
+        >>> result[3]
+        working
+        6
+        >>> result[3]  # smap uses systematic on-demand computations
+        working
+        6
+        >>> cached[3]
+        working
+        6
+        >>> cached[3]  # skips computation
+        6
     """
     return CachedSequence(arr, cache_size, cache)

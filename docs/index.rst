@@ -13,7 +13,6 @@ SeqTools
 
 .. testsetup::
 
-   import seqtools
    import time
 
 

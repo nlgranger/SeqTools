@@ -67,6 +67,9 @@ Evaluation and buffering
 Errors
 ------
 
+Please, consult the `tutorial on error management
+<examples/errors_and_debugging.ipynb>`_ for detailed explanations.
+
 .. autoclass:: EvaluationError
 
 .. autofunction:: seterr

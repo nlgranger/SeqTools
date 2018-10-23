@@ -127,6 +127,13 @@ def gather(sequence, indexes):
        :alt: gather
        :width: 15%
        :align: center
+
+    Example:
+
+        >>> arr = ['d', 'e', 'h', 'l', 'o', 'r', 'w', ' ']
+        >>> idx = [2, 1, 3, 3, 4, 7, 6, 4, 5, 3, 0]
+        >>> list(seqtools.gather(arr, idx))
+        ['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd']
     """
     return Gathering(sequence, indexes)
 
@@ -222,6 +229,18 @@ def cycle(sequence, limit=None):
        :alt: collate
        :width: 10%
        :align: center
+
+    Example:
+
+        >>> data = ['a', 'b', 'c']
+        >>> loop = seqtools.cycle(data)
+        >>> loop[3]
+        'a'
+        >>> loop[3 * 10 ** 9 + 1]  # unbounded sequence
+        'b'
+        >>> loop = seqtools.cycle(data, 7)
+        >>> list(loop)
+        ['a', 'b', 'c', 'a', 'b', 'c', 'a']
     """
     return InfiniteCycle(sequence) if limit is None else Cycle(sequence, limit)
 
@@ -292,9 +311,9 @@ def interleave(*sequences):
 
     Example:
 
-        >>> arr1 = [1, 2, 3, 4, 5]
+        >>> arr1 = [ 1,   2,   3,   4,   5]
         >>> arr2 = ['a', 'b', 'c']
-        >>> arr3 = [.1, .2, .3, .4]
+        >>> arr3 = [.1,  .2,  .3,  .4]
         >>> list(interleave(arr1, arr2, arr3))
         [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
     """
@@ -410,6 +429,13 @@ def repeat(value, times=None):
        :alt: repeat
        :width: 10%
        :align: center
+
+    Example:
+
+        >>> item = 3
+        >>> repetition = seqtools.repeat(item, 10)
+        >>> list(repetition)
+        [3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
     """
     if isint(times) and times > 1:
         return Repetition(value, times)

@@ -18,9 +18,9 @@ else:
 class SerializableFunc(object):
     """Decorate a function to become independent from its source file.
 
-    This decorator alters the serialization hook so that unpickling the
-    pickled function will import a back-up of the original source code.
-    This way, a complete pipeline can be saved and reloaded.
+    Should one pickle a mapping object involving a decorated function, the
+    unpickled mapping will use the original source code for the function
+    regardless of subsequent modifications to the file on disk.
 
     .. warning::
 

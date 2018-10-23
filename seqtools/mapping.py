@@ -66,7 +66,7 @@ def smap(f, *sequences):
         >>> a = [1, 2, 3, 4]
         >>> print([v + 2 for v in a])
         [3, 4, 5, 6]
-        >>> m = smap(lambda x: x + 2, a)
+        >>> m = seqtools.smap(lambda x: x + 2, a)
         >>> print([v for v in m])
         [3, 4, 5, 6]
         >>> def do(y, z):
@@ -74,7 +74,7 @@ def smap(f, *sequences):
         ...     return y + z
         ...
         >>> a, b = [1, 2, 3, 4], [4, 3, 2, 1]
-        >>> m = smap(do, a, b)
+        >>> m = seqtools.smap(do, a, b)
         >>> print([v for v in m])
         computing now
         computing now

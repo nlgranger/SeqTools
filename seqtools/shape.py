@@ -98,6 +98,15 @@ def concatenate(sequences):
        :alt: concatenate
        :width: 25%
        :align: center
+
+    Example:
+
+        >>> data1 = [0, 1, 2, 3]
+        >>> data2 = [4, 5]
+        >>> data3 = [6, 7, 8, 9, 10, 11]
+        >>> cat = seqtools.concatenate([data1, data2, data3])
+        >>> [cat[i] for i in range(12)]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     """
     return Concatenation(sequences)
 
@@ -179,12 +188,21 @@ def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
             padding and return an incomplete block anyways (default
             None).
         collate_fn (Callable[[Sequence], Sequence]):
-            An optional function that takes a sequence of items and
-            returns a consolidated batch.
+            An optional function that takes a sequence of batch items
+            and returns a consolidated batch, for example
+            :func:`numpy:numpy.array`.
 
     Return:
         Sequence: A sequence of batches.
 
+    Example:
+
+        >>> data = [i for i in range(25)]
+        >>> batches = seqtools.batch(data, 4, pad=-1, collate_fn=list)
+        >>> batches[0]
+        [0, 1, 2, 3]
+        >>> batches[-1]  # final batch uses padding
+        [24, -1, -1, -1]
     """
     return BatchView(sequence, k, drop_last, pad, collate_fn)
 
@@ -210,6 +228,8 @@ class Unbatching(object):
 def unbatch(sequence, batch_size, last_batch_size=None):
     """Return a view on the concatenation of batched items.
 
+    Reverses the effect of :func:`batch`.
+
     Args:
         sequence (Sequence[Sequence]):
             A sequence of batches.
@@ -222,7 +242,6 @@ def unbatch(sequence, batch_size, last_batch_size=None):
 
     Return:
         Sequence: The concatenation of all batches in `sequence`.
-
     """
     return Unbatching(sequence, batch_size, last_batch_size)
 
@@ -303,5 +322,16 @@ def split(sequence, edges):
     Return:
         Sequence: A sequence of subsequences split accordingly.
 
+    Example:
+
+        >>> data = ['aa', 'ab', 'ac', 'ad',
+        ...         'ba', 'bb',
+        ...         'ca', 'cb', 'cc', 'cd']
+        >>> chunks = seqtools.split(data, [4, 6])
+        >>> list(chunks)
+        [['aa', 'ab', 'ac', 'ad'], ['ba', 'bb'], ['ca', 'cb', 'cc', 'cd']]
+        >>> chunks = seqtools.split(data, [(0, 2), (4, 6), (6, 8)])
+        >>> list(chunks)
+        [['aa', 'ab'], ['ba', 'bb'], ['ca', 'cb']]
     """
     return Split(sequence, edges)

@@ -82,12 +82,9 @@ def debug(sequence, func, max_calls=None, max_rate=None):
 
     Example:
 
-        .. testsetup::
-
-           from seqtools.instrument import debug
-
         >>> sequence = [1, 2, 3, 4, 5]
-        >>> watchthis = debug(sequence, lambda i, v: print(v), 2)
+        >>> watchthis = seqtools.instrument.debug(
+        ...     sequence, lambda i, v: print(v), 2)
         >>> x = watchthis[0]
         1
         >>> y = watchthis[2]
@@ -165,11 +162,28 @@ class ThroughputMonitor(object):
 def monitor_throughput(sequence):
     """Wrap sequence to monitor throughput.
 
-    Returns an sequence with three methods:
+    The resulting sequence has three additional methods:
 
-    - :code:`read_delay()` the average time it takes to read an item.
-    - :code:`throughput()` the invert of the above.
-    - :code:`reset()` resets the accumulated statistics.
+        - :code:`read_delay()` the average time it takes to read an item.
+        - :code:`throughput()` the invert of the above.
+        - :code:`reset()` to reset the accumulated statistics.
 
+    Example:
+
+        .. testsetup::
+
+            import time
+
+        >>> def process(x):
+        ...     time.sleep(0.1)
+        ...     return x
+        >>>
+        >>> data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        >>> result = seqtools.smap(process, data)
+        >>> result = seqtools.instrument.monitor_throughput(result)
+        >>> list(result)
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        >>> print("{:.1f}".format(result.read_delay()))
+        0.1
     """
     return ThroughputMonitor(sequence)
