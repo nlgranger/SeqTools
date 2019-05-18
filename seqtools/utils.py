@@ -7,9 +7,9 @@ import queue
 import multiprocessing
 import logging
 from multiprocessing.sharedctypes import RawArray, RawValue
-try:  # Python 2.7+
+try:
     from logging import NullHandler
-except ImportError:
+except ImportError:  # Python 2.7+
     class NullHandler(logging.Handler):
         def emit(self, record):
             pass

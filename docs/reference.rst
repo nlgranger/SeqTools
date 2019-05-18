@@ -21,6 +21,8 @@ API Reference
    interleave
    cycle
    repeat
+   switch
+   case
    batch
    unbatch
    split
@@ -53,6 +55,8 @@ Indexing and reshaping
 .. autofunction:: batch
 .. autofunction:: unbatch
 .. autofunction:: split
+.. autofunction:: switch
+.. autofunction:: case
 
 
 Evaluation and buffering
