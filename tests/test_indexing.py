@@ -1,6 +1,6 @@
 from random import random, randint
 import pytest
-from seqtools import arange, gather, cycle, interleave, repeat
+from seqtools import arange, case, switch, gather, cycle, interleave, repeat
 
 
 def test_arange():
@@ -68,6 +68,38 @@ def test_reindex():
         reindexed[i] = new_values[i]
         arr2[idx[idx2[i]]] = new_values[i]
     assert arr1 == arr2
+
+
+def test_case():
+    values = [[randint(0, 1000) for _ in range(100)] for _ in range(10)]
+    selector = [randint(0, 9) for _ in range(100)]
+
+    res = case(selector, *values)
+    tgt = [values[s][i] for i, s in enumerate(selector)]
+
+    assert list(res) == tgt
+
+    original_values = [list(l) for l in values]
+    subset = list(range(25, 75, 3))
+    res[25:75:3] = [-1] * len(subset)
+    for i in range(len(selector)):
+        row = [v[i] for v in values]
+        tgt = [v[i] for v in original_values]
+        if i in subset:
+            tgt[selector[i]] = -1
+        assert row == tgt
+
+
+def test_switch():
+    values_true = [randint(0, 1000) for _ in range(100)]
+    values_false = [randint(0, 1000) for _ in range(100)]
+    condition = [randint(0, 1) > 0 for _ in range(100)]
+
+    res = switch(condition, values_true, values_false)
+    tgt = [t if c else f
+           for c, t, f in zip(condition, values_true, values_false)]
+
+    assert list(res) == tgt
 
 
 def test_cycle():

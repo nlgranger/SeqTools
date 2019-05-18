@@ -443,3 +443,44 @@ def repeat(value, times=None):
         return InfiniteRepetition(value)
     else:
         raise TypeError("times must be a positive integer or None")
+
+
+def switch(condition, x, y):
+    """Combine the values of two sequences based on condition.
+
+    Args:
+        condition (Sequence[bool]): a sequence of booleans
+        x (Sequence): values when condition is true
+        y (Sequence): values when condition is false
+    """
+    return Case(condition, y, x)
+
+
+class Case(object):
+    def __init__(self, selector, *values):
+        if any(len(v) != len(selector) for v in values):
+            raise ValueError("all inputs must have the same size")
+
+        self.selector = selector
+        self.values = values
+
+    def __len__(self):
+        return len(self.selector)
+
+    @basic_getitem
+    def __getitem__(self, item):
+        return self.values[self.selector[item]][item]
+
+    @basic_setitem
+    def __setitem__(self, key, value):
+        self.values[self.selector[key]][key] = value
+
+
+def case(selector, *values):
+    """Switch between different sequences based on selector value.
+
+    Args:
+        selector (Sequence[int]): indexes of the selected sequence
+        values (Sequence): data sequences
+    """
+    return Case(selector, *values)
