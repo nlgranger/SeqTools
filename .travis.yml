@@ -1,21 +1,26 @@
+dist: xenial
 language: python
-sudo: false
 cache: pip
 
 python:
   - "2.7"
   - "3.5"
-  - "3.6"
+  - "3.7"
   #- "pypy3.5"  fails due to timing tests
 
+before_install:
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then sudo apt-get install -y pandoc; fi
+
 install:
-  - pip install tox
-  - pip install codecov
+  - pip install codecov numpy pytest-cov pytest-timeout
+  - pip install -e .
 
 script:
-  - tox -e py${TRAVIS_PYTHON_VERSION:0:1}${TRAVIS_PYTHON_VERSION:2:1}
-  - tox -e coverage -- xml
+  - pytest --cov="seqtools" --cov-config="setup.cfg" --cov-report=
+  - coverage xml
   - codecov --file=coverage.xml
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then pip install nose sphinx ipython ipykernel nbconvert nbsphinx Pillow scikit-learn scipy; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then python -m sphinx -M doctest docs docs/_build; fi
 
 deploy:
   provider: pypi
@@ -25,4 +30,4 @@ deploy:
   on:
     tags: true
     branch: master
-    python: "3.6"
+    python: "3.7"
