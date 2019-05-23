@@ -8,7 +8,7 @@
    :target: http://seqtools-doc.readthedocs.io
    :alt: Documentation
 .. image:: https://api.codacy.com/project/badge/Grade/f5324dc1e36d46f7ae1cabaaf6bce263
-   :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nlgranger/SeqTools&amp;utm_campaign=Badge_Grade
+   :target: https://www.codacy.com/app/nlgranger/SeqTools?utm_source=github.com&utm_medium=referral&utm_content=nlgranger/SeqTools&utm_campaign=Badge_Grade
    :alt: Code quality analysis
 .. image:: https://codecov.io/gh/nlgranger/SeqTools/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/nlgranger/SeqTools
@@ -17,23 +17,23 @@
    :target: http://joss.theoj.org/papers/527a3c6e78ef0b31f93bbd29235d5a0b
    :alt: Citable paper
 
-
 SeqTools
 ========
 
 SeqTools facilitates the manipulation of datasets and the evaluation of a
-transformation pipeline.Some of the provided functionnalities include: mapping
+transformation pipeline. Some of the provided functionalities include: mapping
 element-wise operations, reordering, reindexing, concatenation, joining,
-slicing, minibatching, `etc <https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
+slicing, minibatching, `etc
+<https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
 
 To improve ease of use, SeqTools manipulates **list-like objects**, otherwise
 known as a `sequences <https://docs.python.org/3/glossary.html#term-sequence>`_
 (objects with a length supporting integer or slice based indexing).
 
-Manipulating a dataset as a whole can be slow and resource/memry intensive. To
+Manipulating a dataset as a whole can be slow and resource/memory intensive. To
 circumvent this issue, SeqTools implements **on-demand evaluation** under the
-hood: operations and tranformations on a dataset are only applied to individual
-items when they are actually accesse. This is particularly convenient for
+hood: operations and transformations on a dataset are only applied to individual
+items when they are actually accessed. This is particularly convenient for
 prototyping.
 
 When comes the transition from prototyping to execution, the list-like container
@@ -47,19 +47,18 @@ fault-tolerant functions and insightful error reporting. Moreover, internal code
 is kept concise and clear with comments to facilitate error tracing through a
 failing transformation pipeline.
 
-
 Example
 -------
 
 >>> def f1(x):
-...     return x + 1
+... return x + 1
 ...
->>> def f2(x):  # slow and memory heavy transformation
-...     time.sleep(.01)
-...     return [x for _ in range(500)]
+>>> def f2(x): # slow and memory heavy transformation
+... time.sleep(.01)
+... return [x for _ in range(500)]
 ...
 >>> def f3(x):
-...     return sum(x) / len(x)
+... return sum(x) / len(x)
 ...
 >>> data = list(range(1000))
 
@@ -67,23 +66,22 @@ Without delayed evaluation, defining the pipeline and reading values looks like
 so:
 
 >>> tmp1 = [f1(x) for x in data]
->>> tmp2 = [f2(x) for x in tmp1]  # takes 10 seconds and a lot of memory
+>>> tmp2 = [f2(x) for x in tmp1] # takes 10 seconds and a lot of memory
 >>> res = [f3(x) for x in tmp2]
 >>> print(res[2])
 3.0
->>> print(max(tmp2[2]))  # requires to store 499 500 useless values along
+>>> print(max(tmp2[2])) # requires to store 499 500 useless values along
 3
 
 With seqtools:
 
 >>> tmp1 = seqtools.smap(f1, data)
 >>> tmp2 = seqtools.smap(f2, tmp1)
->>> res = seqtools.smap(f3, tmp2)  # no computations so far
->>> print(res[2])  # takes 0.01 seconds
+>>> res = seqtools.smap(f3, tmp2) # no computations so far
+>>> print(res[2]) # takes 0.01 seconds
 3.0
->>> print(max(tmp2[2]))  # easy access to intermediate results
+>>> print(max(tmp2[2])) # easy access to intermediate results
 3
-
 
 Batteries included!
 -------------------
@@ -111,14 +109,13 @@ The library comes with a set of functions to manipulate sequences:
 .. _interleaving: reference.html#seqtools.interleave
 
 ==================== ================= ===============
-| `concatenation`_   | `batching`_     | `reindexing`_
+| 'concatenation'_   | 'batching'_     | 'reindexing'_
 | |concatenate|      | |batch|         | |gather|
-| `prefetching`_     | `interleaving`_
+| 'prefetching'_     | 'interleaving'_
 | |prefetch|         | |interleaving|
 ==================== ================= ===============
 
 and others (suggestions are also welcome).
-
 
 Installation
 ------------
@@ -127,13 +124,11 @@ Installation
 
    pip install seqtools
 
-
 Documentation
 -------------
 
 The documentation is hosted at `https://seqtools-doc.readthedocs.io
 <https://seqtools-doc.readthedocs.io>`_.
-
 
 Contributing and Support
 ------------------------
@@ -142,7 +137,6 @@ Use the `issue tracker <https://github.com/nlgranger/SeqTools/issues>`_
 to request features, propose improvements or report issues. For questions
 regarding usage, please send an `email
 <mailto:3764009+nlgranger@users.noreply.github.com>`_.
-
 
 Related libraries
 -----------------
@@ -164,5 +158,5 @@ Learning libraries such as PyTorch's `torch.utils.data
 `tf.data <https://www.tensorflow.org/guide/datasets>`_. The interface of these
 libraries focuses on `iterators
 <https://docs.python.org/3/library/stdtypes.html#iterator-types>`_ to access
-transformed elements, contary to SeqTools which also provides arbitrary reads
+transformed elements, contrary to SeqTools which also provides arbitrary reads
 via indexing.

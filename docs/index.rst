@@ -17,18 +17,19 @@ SeqTools
 
 
 SeqTools facilitates the manipulation of datasets and the evaluation of a
-transformation pipeline.Some of the provided functionnalities include: mapping
+transformation pipeline. Some of the provided functionalities include: mapping
 element-wise operations, reordering, reindexing, concatenation, joining,
-slicing, minibatching, :ref:`etc <API Reference>`.
+slicing, minibatching, `etc
+<https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
 
 To improve ease of use, SeqTools manipulates **list-like objects**, otherwise
 known as a `sequences <https://docs.python.org/3/glossary.html#term-sequence>`_
 (objects with a length supporting integer or slice based indexing).
 
-Manipulating a dataset as a whole can be slow and resource/memry intensive. To
+Manipulating a dataset as a whole can be slow and resource/memory intensive. To
 circumvent this issue, SeqTools implements **on-demand evaluation** under the
-hood: operations and tranformations on a dataset are only applied to individual
-items when they are actually accesse. This is particularly convenient for
+hood: operations and transformations on a dataset are only applied to individual
+items when they are actually accessed. This is particularly convenient for
 prototyping.
 
 When comes the transition from prototyping to execution, the list-like container
@@ -144,5 +145,5 @@ Learning libraries such as PyTorch's `torch.utils.data
 `tf.data <https://www.tensorflow.org/guide/datasets>`_. The interface of these
 libraries focuses on `iterators
 <https://docs.python.org/3/library/stdtypes.html#iterator-types>`_ to access
-transformed elements, contary to SeqTools which also provides arbitrary reads
+transformed elements, contrary to SeqTools which also provides arbitrary reads
 via indexing.

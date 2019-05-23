@@ -11,16 +11,16 @@ Tutorial
 Simple mapping
 --------------
 
-The most basic (and possibly the most useful) function is :func:`smap`
-which maps a function to each element of a sequence:
+The most basic (and possibly the most useful) function is :func:`smap` which
+maps a function to each element of a sequence, similarly to what :func:`map`
+does for iterables:
 
 >>> data = [3, 5, 1, 4]
 >>> y = seqtools.smap(lambda x: x * 2, data)
 >>> [y[i] for i in range(4)]
 [6, 10, 2, 8]
 
-:func:`smap` is equivalent to the standard :func:`map` function. To
-understand the effect of lazy evaluation, let's add a notification when the
+To understand the effect of lazy evaluation, let's add a notification when the
 function is called:
 
 >>> def f(x):
@@ -36,7 +36,7 @@ processing 3
 
 .. note::
 
-    There is no caching/memoization mechanism included, so multiple calls to
+    There is no caching/memoization mechanism included, so repeated calls to
     the same element will trigger a call to the mapping functions each time:
 
     >>> y1[0]
@@ -49,7 +49,7 @@ processing 3
     See :func:`add_cache` for a simple form of caching mechanism.
 
 If the transformation is slow to compute and/or the sequence is large, lazy
-evaluation can dramatically reduce the delay to obtain any individual results.
+evaluation can dramatically reduce the delay to obtain any particular item.
 Furthermore, on can chain several transformations in a pipeline. This is
 particularly convenient when intermediate transformations are memory heavy
 because SeqTools only stores intermediate results for one element at a time:
@@ -68,7 +68,7 @@ because SeqTools only stores intermediate results for one element at a time:
 >>> y2 = seqtools.smap(g, y1)
 >>>
 >>> # computing one of the output values only uses sizeof(float) * 10000
->>> # whereas explicitely computing y1 would gather sizeof(float) * 10000 * 2000
+>>> # whereas explicitely computing y1 would use sizeof(float) * 10000 * 2000
 >>> y2[2]
 2.0
 
@@ -123,7 +123,7 @@ Going further
 -------------
 
 To finally compute all the values from a sequence, :func:`prefetch` provides
-an wrapper backed by multiple workers to compute the values more quickly.
+a wrapper backed by multiple workers to compute the values more quickly.
 
 To see the library in practice, you can see how to :ref:`build, debug and run a
 transformation pipeline <Building and running a preprocessing pipeline>` over
