@@ -187,7 +187,7 @@ class SeqSlice(object):
         self.sequence[self.start + key * self.step] = value
 
 
-class SharedCtypeQueue:
+class SharedCtypeQueue(object):
     """Simplified multiprocessing queue for `struct` entities."""
     def __init__(self, fmt, maxsize):
         self.fmt = fmt
@@ -234,3 +234,31 @@ class SharedCtypeQueue:
 
     def empty(self):
         return self.stop.value == self.start.value
+
+
+class SharedList(object):
+    def __init__(self, values):
+        self.rx = []
+        self.tx = []
+        for _ in range(len(values)):
+            rx, tx = multiprocessing.Pipe(duplex=False)
+            self.rx.append(rx)
+            self.tx.append(tx)
+
+        self.cache = list(values)
+
+    def __len__(self):
+        return len(self.rx)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
+    def __getitem__(self, item):
+        while self.rx[item].poll():
+            self.cache[item] = self.rx[item].recv()
+
+        return self.cache[item]
+
+    def __setitem__(self, item, value):
+        self.tx[item].send(value)

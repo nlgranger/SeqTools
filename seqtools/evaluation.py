@@ -17,7 +17,7 @@ except ImportError:
 import tblib
 from future.utils import raise_from
 
-from .utils import isint, SharedCtypeQueue, get_logger
+from .utils import isint, SharedCtypeQueue, SharedList, get_logger
 from .errors import EvaluationError, format_stack, with_traceback, \
     passthrough, seterr
 
@@ -143,7 +143,8 @@ class AsyncSequence(object):
     """
     def __init__(self, sequence, job_queue, done_queue,
                  values_cache, errors_cache,
-                 worker_t, nworkers=0, timeout=1., start_hook=None):
+                 worker_t, nworkers=0, timeout=1.,
+                 start_hook=None):
         if nworkers < 1:
             nworkers += multiprocessing.cpu_count()
         if nworkers <= 0:
@@ -243,6 +244,14 @@ class AsyncSequence(object):
                 timeout, start_hook):
         logger = get_logger(__name__)
 
+        def terminate(reason=None):
+            if reason is not None:
+                logger.debug("worker %d: %s", pid, reason)
+
+            logger.debug("worker %d: exiting", pid)
+
+            sys.exit(0)
+
         seterr(evaluation='passthrough')
         if start_hook is not None:
             start_hook()
@@ -255,16 +264,13 @@ class AsyncSequence(object):
                 try:  # notify parent
                     done_queue.put((0, -pid - 1, 0))
                 finally:
-                    logger.debug("worker %d: timeout, exiting", pid)
-                    return
+                    terminate("timeout")
 
-            except IOError:  # parent probably died
-                logger.debug("worker %d: parent died, exiting", pid)
-                return
+            except IOError as e:  # parent probably died
+                terminate(str(e))
 
             if slot < 0:  # terminate
-                logger.debug("worker %d: clean termination", pid)
-                return
+                terminate("received termination signal")
 
             try:
                 value_slots[slot] = sequence[idx]
@@ -275,16 +281,18 @@ class AsyncSequence(object):
                     trace_dump = tblib.Traceback(sys.exc_info()[2])
                     error_slots[slot] = error, trace_dump
                 except Exception:
-                    error_slots[slot] = None, None
+                    try:
+                        error_slots[slot] = None, None
+                    except IOError as e:
+                        terminate(str(e))
 
                 job_status = JobStatus.FAILED
 
             try:  # notify about job termination
                 done_queue.put((idx, slot, job_status))
 
-            except IOError:  # parent process died unexpectedly
-                logger.debug("worker %d: parent died, exiting", pid)
-                return
+            except IOError as e:  # parent probably died
+                terminate(str(e))
 
 
 def prefetch(sequence, max_buffered,
@@ -350,9 +358,8 @@ def prefetch(sequence, max_buffered,
     elif method in ("process", "proc"):
         job_queue = SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
         done_queue = SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
-        manager = multiprocessing.Manager()
-        values_cache = manager.list([None] * max_buffered)
-        errors_cache = manager.list([None, None] * max_buffered)
+        values_cache = SharedList([None] * max_buffered)
+        errors_cache = SharedList([None, None] * max_buffered)
         worker_t = multiprocessing.Process
         async_seq = AsyncSequence(
             sequence, job_queue, done_queue, values_cache, errors_cache,

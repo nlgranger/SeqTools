@@ -4,7 +4,7 @@ import re
 
 
 # This line is updated automatically
-version = "0.9.1"
+version = "0.9.1-r4-g66a4a86"
 
 # If we are in the repo, the following script will update the version
 # number and update this file, otherwise, we are probably in the source
