@@ -1,7 +1,5 @@
-import sys
 import inspect
 import threading
-from future.utils import raise_with_traceback
 
 
 class EvaluationError(Exception):
@@ -11,7 +9,7 @@ class EvaluationError(Exception):
 
 # Settings --------------------------------------------------------------------
 
-def seterr(evaluation='wrap'):
+def seterr(evaluation=None):
     """Set how errors are handled.
 
     Args:
@@ -22,17 +20,18 @@ def seterr(evaluation='wrap'):
               its cause.
             - `'passthrough'`: let the error propagate through SeqTool code,
               might facilitate step-by-step debugging.
+            - `None` leave unchanged and return current setting
+    Returns:
+        The setting value.
     """
     if evaluation == 'wrap':
         error_config.passthrough = False
     elif evaluation == 'passthrough':
         error_config.passthrough = True
-    else:
+    elif evaluation is not None:
         raise ValueError("evaluation must be 'wrap' or 'passthrough'")
 
-
-def passthrough():
-    return error_config.passthrough
+    return "passthrough" if error_config.passthrough else 'wrap'
 
 
 class ErrorConfig(threading.local):
@@ -70,13 +69,3 @@ def format_stack(skip=1):
             out += "    " + line
 
     return out
-
-
-def with_traceback(error, tb):
-    if sys.version_info.major == 2:
-        try:
-            raise_with_traceback(error, tb)
-        except Exception as error:
-            return error
-    else:
-        return error.with_traceback(tb)

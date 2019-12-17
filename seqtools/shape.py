@@ -3,10 +3,7 @@
 import array
 import bisect
 import itertools
-try:
-    from itertools import izip as zip  # pylint: disable=redefined-builtin
-except ImportError:
-    pass
+
 from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
 
 

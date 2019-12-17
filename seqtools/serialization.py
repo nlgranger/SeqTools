@@ -2,12 +2,12 @@
 Hackish workaround to help serialize a pipeline inclusing its functions.
 """
 
-import os
-import sys
-import inspect
-import tempfile
-import shutil
 import functools
+import inspect
+import os
+import shutil
+import sys
+import tempfile
 
 if sys.version_info >= (3, 4):
     from importlib import import_module, reload

@@ -28,7 +28,6 @@ API Reference
    split
    add_cache
    prefetch
-   load_buffers
    SerializableFunc
    EvaluationError
    seterr
@@ -64,7 +63,6 @@ Evaluation and buffering
 
 .. autofunction:: add_cache
 .. autofunction:: prefetch
-.. autofunction:: load_buffers
 .. autoclass:: SerializableFunc
 
 

@@ -1,7 +1,5 @@
-from future.utils import raise_from
-
+from .errors import EvaluationError, format_stack, seterr
 from .utils import basic_getitem
-from .errors import EvaluationError, format_stack, passthrough
 
 
 class Mapping(object):
@@ -26,12 +24,12 @@ class Mapping(object):
                 i += 1
 
         except Exception as error:
-            if passthrough() or isinstance(error, EvaluationError):
+            if seterr() == 'passthrough' or isinstance(error, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
                     i, self.__class__.__name__, self.stack)
-                raise_from(EvaluationError(msg), error)
+                raise EvaluationError(msg) from error
 
     @basic_getitem
     def __getitem__(self, item):
@@ -39,12 +37,12 @@ class Mapping(object):
             return self.f(*(l[item] for l in self.sequences))
 
         except Exception as cause:
-            if passthrough() or isinstance(cause, EvaluationError):
+            if seterr() == 'passthrough' or isinstance(cause, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
                     item, self.__class__.__name__, self.stack)
-                raise_from(EvaluationError(msg), cause)
+                raise EvaluationError(msg) from cause
 
 
 def smap(f, *sequences):

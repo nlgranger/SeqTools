@@ -1,18 +1,8 @@
 """Miscellaneous tools for internal use."""
 
-import ctypes
-import struct
-import numbers
-import queue
-import multiprocessing
 import logging
-from multiprocessing.sharedctypes import RawArray, RawValue
-try:
-    from logging import NullHandler
-except ImportError:  # Python 2.7+
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
+import numbers
+from logging import NullHandler
 
 
 def isint(x):
@@ -185,80 +175,3 @@ class SeqSlice(object):
     @basic_setitem
     def __setitem__(self, key, value):
         self.sequence[self.start + key * self.step] = value
-
-
-class SharedCtypeQueue(object):
-    """Simplified multiprocessing queue for `struct` entities."""
-    def __init__(self, fmt, maxsize):
-        self.fmt = fmt
-        self.itemsize = struct.calcsize(fmt)
-        self.maxsize = maxsize
-        self.values = memoryview(RawArray("b", maxsize * self.itemsize))
-        self.start = RawValue(ctypes.c_longlong, 0)
-        self.startlock = multiprocessing.Lock()
-        self.getsem = multiprocessing.Semaphore(0)
-        self.stop = RawValue(ctypes.c_longlong, 0)
-        self.stoplock = multiprocessing.Lock()
-        self.putsem = multiprocessing.Semaphore(maxsize)
-
-    def get(self, blocking=True, timeout=None):
-        # wait for something to read
-        if not self.getsem.acquire(blocking, timeout):
-            raise queue.Empty()
-
-        with self.startlock:  # no timeout but should go unnoticed
-            offset = (self.start.value % self.maxsize) * self.itemsize
-            buf = self.values[offset:offset + self.itemsize]
-
-            try:
-                value = struct.unpack(self.fmt, buf)
-            finally:  # release buffer slot for writing
-                self.start.value += 1
-                self.putsem.release()
-
-        return value
-
-    def put(self, value, blocking=True, timeout=None):
-        # wait for an empty slot
-        if not self.putsem.acquire(blocking, timeout):
-            raise queue.Full()
-
-        with self.stoplock:  # no timeout but should go unnoticed
-            offset = (self.stop.value % self.maxsize) * self.itemsize
-
-            try:  # transfer values and update state
-                struct.pack_into(self.fmt, self.values, offset, *value)
-            finally:  # activate read slot
-                self.stop.value += 1
-                self.getsem.release()
-
-    def empty(self):
-        return self.stop.value == self.start.value
-
-
-class SharedList(object):
-    def __init__(self, values):
-        self.rx = []
-        self.tx = []
-        for _ in range(len(values)):
-            rx, tx = multiprocessing.Pipe(duplex=False)
-            self.rx.append(rx)
-            self.tx.append(tx)
-
-        self.cache = list(values)
-
-    def __len__(self):
-        return len(self.rx)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
-
-    def __getitem__(self, item):
-        while self.rx[item].poll():
-            self.cache[item] = self.rx[item].recv()
-
-        return self.cache[item]
-
-    def __setitem__(self, item, value):
-        self.tx[item].send(value)

@@ -1,311 +1,501 @@
-"""Tools related to the evaluation of sequence items."""
-
-import sys
-import array
-import multiprocessing
-import multiprocessing.sharedctypes
-import threading
-import signal
+import functools
+import struct
+import pickle as pkl
+import gc
+import os
 import queue
-from enum import IntEnum
+import signal
+import threading
+import time
+from abc import ABC, abstractmethod
+from weakref import finalize
 
 try:
-    from weakref import finalize
+    from torch import multiprocessing
+    from torch.multiprocessing import sharedctype
 except ImportError:
-    from backports.weakref import finalize
+    import multiprocessing
+    from multiprocessing import sharedctypes
+from tblib import pickling_support
 
-import tblib
-from future.utils import raise_from
-
-from .utils import isint, SharedCtypeQueue, SharedList, get_logger
-from .errors import EvaluationError, format_stack, with_traceback, \
-    passthrough, seterr
-
-
-# -----------------------------------------------------------------------------
+from .errors import format_stack, EvaluationError, seterr
+from .memory import packed_size, pack, unpack
+from .utils import get_logger
+from .C.memory import RefCountedBuffer
 
 
-class JobStatus(IntEnum):
-    """A status descriptor for evaluated jobs."""
-    QUEUED = 1
-    DONE = 2
-    FAILED = 3
+pickling_support.install()
 
 
-class PrefetchedSequence(object):
-    """Wraps :class:`AsyncSequence` to expose a more familiar
-    :class:`python:Sequence` interface.
-    """
-    def __init__(self, async_seq, max_cached, timeout=1., anticipate=None):
-        if max_cached < 1:
-            raise ValueError("cache must contain at least one slot.")
+# Asynchronous item fetching backends -----------------------------------------
 
-        self.creation_stack = format_stack(2)
+class AsyncWorker(ABC):
+    @abstractmethod
+    def submit_job(self, item):
+        raise NotImplementedError
 
-        self.async_seq = async_seq
-        self.max_cached = max_cached
-        self.timeout = timeout
-        self.anticipate = anticipate or (lambda s: s + 1)
+    @abstractmethod
+    def wait_completion(self):
+        raise NotImplementedError
 
-        # Sorting logic
-        self.todo = array.array('l', [0] * max_cached)
-        self.status = array.array('b', [JobStatus.DONE] * max_cached)
-        self.first_slot = 0
 
-        # Setup initial jobs
-        self._start_job(0)
-        for i in range(1, max_cached - 1):
-            self.todo[i] = self.anticipate(self.todo[i - 1])
-            self._start_job(i)
+class ProcessBackend(AsyncWorker):
+    """Process-based workers communicating values with pipes."""
+    def __init__(self, seq, num_workers=0, init_fn=None):
+        if num_workers <= 0:
+            num_workers = multiprocessing.cpu_count() - num_workers
+        if num_workers <= 0:
+            raise ValueError("at least one worker required")
+
+        self.job_queue = multiprocessing.Queue()
+        self.result_pipes = []
+
+        self.workers = []
+        for _ in range(num_workers):
+            rx, tx = multiprocessing.Pipe(duplex=False)
+            worker = multiprocessing.Process(
+                target=self.__class__.worker,
+                args=(seq, self.job_queue, tx, init_fn),
+                daemon=True)
+
+            old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            worker.start()
+            signal.signal(signal.SIGINT, old_sig_hdl)
+            tx.close()
+            self.result_pipes.append(rx)
+            self.workers.append(worker)
+
+        # monitor workers
+        self.worker_died = threading.Event()
+        worker_monitor = threading.Thread(target=ProcessBackend.monitor_workers,
+                                          args=(self.workers, self.worker_died),
+                                          daemon=True)
+        worker_monitor.start()
+
+        # set cleanup hooks
+        finalize(self, ProcessBackend.cleanup,
+                 self.job_queue, self.workers, worker_monitor)
+
+    def submit_job(self, item):
+        self.job_queue.put(item)
+
+    def wait_completion(self):
+        while True:
+            p = multiprocessing.connection.wait(self.result_pipes, timeout=1)
+            if len(p) > 0:
+                try:
+                    return p[0].recv()
+                except EOFError:
+                    self.worker_died.set()
+
+            if self.worker_died.is_set():
+                raise RuntimeError("worker died unexpetedly")
+
+    @staticmethod
+    def worker(seq, job_queue, result_pipe, init_fn):
+        logger = get_logger(__name__)
+        ppid = os.getppid()
+        logger.debug("worker started")
+
+        if init_fn is not None:
+            init_fn()
+
+        seterr('passthrough')
+
+        while True:
+            # acquire job
+            while True:
+                try:
+                    idx = job_queue.get(timeout=1)
+                    break
+                except queue.Empty:
+                    if os.getppid() != ppid:  # parent died
+                        logger.debug("worker stopping because parent crashed")
+                        return
+
+            if idx < 0:  # stop on sentinel value
+                logger.debug("worker stopping")
+                return
+
+            # collect value (or error trying)
+            try:
+                value = seq[idx]
+            except Exception as e:
+                value = e
+                success = False
+            else:
+                success = True
+
+            # send it
+            try:
+                result_pipe.send((idx, success, value))
+
+            except Exception as e:
+                if success:  # can't send it, this becomes an error case
+                    msg = ("failed to send item {} to parent process, ".format(idx)
+                           + "is it picklable? Error message was:\n{}".format(e))
+                    value = ValueError(msg)
+                    success = False
+
+                else:  # can't send the error, fallback to a simplified feedback
+                    value = str(e)
+
+                try:
+                    result_pipe.send((idx, success, value))
+                except BrokenPipeError:  # parent died unexpectedly
+                    logger.debug("worker stopping because pipe closed")
+                    return
+
+    @staticmethod
+    def monitor_workers(workers, worker_died):
+        while True:
+            for w in workers:
+                if not w.is_alive():
+                    worker_died.set()
+                    return
+
+            time.sleep(1)
+
+    @staticmethod
+    def cleanup(job_queue, workers, monitor):
+        for _ in workers:
+            job_queue.put(-1)
+        for w in workers:
+            if w.is_alive():
+                w.join()
+        monitor.join()
+
+
+class BufferRecycler:
+    def __init__(self, buffers):
+        self.buffers = buffers
+        self.buffer_queue = queue.Queue(maxsize=len(buffers))
+        terminated = threading.Event()
+        for i, buf in enumerate(buffers):
+            cb = functools.partial(
+                BufferRecycler.recycle,
+                buffer_idx=i,
+                buffer_queue=self.buffer_queue,
+                terminated=terminated)
+            rcbuf = RefCountedBuffer(buf, cb)
+            self.buffer_queue.put((i, rcbuf))
+
+        finalize(self, BufferRecycler.finalize, terminated)
+
+    def fetch(self):
+        try:
+            i, buf = self.buffer_queue.get_nowait()
+            return i, memoryview(buf)
+        except queue.Empty:
+            pass
+
+        gc.collect()
+        try:
+            i, buf = self.buffer_queue.get_nowait()
+            return i, memoryview(buf)
+        except queue.Empty:
+            raise MemoryError("none of the buffers has been release yet.") from None
+
+    @staticmethod
+    def recycle(buffer, buffer_idx, buffer_queue, terminated):
+        if not terminated.is_set():
+            buffer_queue.put_nowait((buffer_idx, buffer))
+
+    @staticmethod
+    def finalize(terminated):
+        terminated.set()
+
+
+class SHMProcessBacked(AsyncWorker):
+    """Process-based workers communicating values via shared memory."""
+    def __init__(self, seq, num_workers=0, buffer_size=20, init_fn=None):
+        if num_workers <= 0:
+            num_workers = multiprocessing.cpu_count() - num_workers
+        if num_workers <= 0:
+            raise ValueError("at least one worker required")
+        if buffer_size < num_workers:
+            raise ValueError("at least one buffer slot required by worker")
+
+        self.sample = seq[0]
+        sample_size = packed_size(self.sample)
+
+        self.job_queue = multiprocessing.Queue()
+        self.result_pipes = []
+        shm = memoryview(sharedctypes.RawArray('b', sample_size * buffer_size))
+        buffers = [shm[i * sample_size:(i + 1) * sample_size]
+                   for i in range(buffer_size)]
+        self.buffer_recycler = BufferRecycler(buffers)
+        self.result_buffers = {}
+
+        self.workers = []
+        for _ in range(num_workers):
+            rx, tx = multiprocessing.Pipe(duplex=False)
+
+            worker = multiprocessing.Process(
+                target=self.__class__.worker,
+                args=(seq, self.job_queue, buffers, tx, init_fn),
+                daemon=True)
+            old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            worker.start()
+            signal.signal(signal.SIGINT, old_sig_hdl)
+            tx.close()
+
+            self.result_pipes.append(rx)
+            self.workers.append(worker)
+
+        # monitor workers
+        self.worker_died = threading.Event()
+        worker_monitor = threading.Thread(target=ProcessBackend.monitor_workers,
+                                          args=(self.workers, self.worker_died),
+                                          daemon=True)
+        worker_monitor.start()
+
+        # set cleanup hooks
+        finalize(self, SHMProcessBacked.cleanup,
+                 self.job_queue, self.workers, worker_monitor)
+
+    def submit_job(self, item):
+        try:
+            slot, self.result_buffers[item] = self.buffer_recycler.fetch()
+        except MemoryError as e:
+            if any(not w.is_alive() for w in self.workers):
+                raise RuntimeError("worker died unexpetedly")
+            raise e from None
+        else:
+            self.job_queue.put((item, slot))
+
+    def wait_completion(self):
+        while True:
+            p = multiprocessing.connection.wait(self.result_pipes, timeout=1)
+            if len(p) > 0:
+                try:
+                    idx, success, error = struct.unpack('L?L', p[0].recv_bytes(24))
+                    if not success:
+                        error = pkl.loads(p[0].recv_bytes(error))
+                except EOFError:
+                    self.worker_died.set()
+                    raise RuntimeError("worker died unexpectedly")
+                else:
+                    break
+
+            elif self.worker_died.is_set():
+                raise RuntimeError("worker died unexpetedly")
+
+        if success:
+            value, _ = unpack(self.sample, self.result_buffers.pop(idx))
+            return idx, success, value
+        else:
+            return idx, success, error
+
+    @staticmethod
+    def worker(seq, job_queue, buffers, result_pipe, init_fn):
+        ppid = os.getppid()
+        logger = get_logger(__name__)
+        logger.debug("worker started")
+
+        if init_fn is not None:
+            init_fn()
+
+        seterr('passthrough')
+
+        while True:
+            # acquire job
+            while True:
+                try:
+                    idx, buffer_idx = job_queue.get(timeout=1)
+                    break
+                except queue.Empty:
+                    if os.getppid() != ppid:  # parent died
+                        logger.debug("worker stopping because parent crashed")
+                        return
+
+            if idx < 0:  # stop on sentinel value
+                return
+
+            # collect value (or error trying)
+            try:
+                payload = seq[idx]
+            except Exception as e:
+                payload = e
+                success = False
+            else:
+                success = True
+
+            # send it
+            if success:
+                try:
+                    pack(payload, buffers[buffer_idx])
+                    result_pipe.send_bytes(struct.pack('L?L', idx, success, 0))
+                except Exception as e:
+                    msg = ("failed to send item {} to parent process, ".format(idx)
+                           + "is it packable? Error message was:\n{}".format(e))
+                    payload = ValueError(msg)
+                    success = False
+
+            if not success:
+                try:
+                    payload = pkl.dumps(payload)
+                except Exception:  # fallback to a simplified feedback
+                    payload = pkl.dumps(str(payload))
+
+                try:
+                    result_pipe.send_bytes(struct.pack('L?L', idx, success, len(payload)))
+                    result_pipe.send_bytes(payload)
+                except BrokenPipeError:  # unrecoverable error
+                    # parent died unexpectedly
+                    logger.debug("worker stopping because pipe closed")
+                    return
+
+    @staticmethod
+    def cleanup(job_queue, workers, monitor):
+        for _ in workers:
+            job_queue.put((-1, -1))
+        for w in workers:
+            if w.is_alive():
+                w.join()
+        monitor.join()
+
+
+class ThreadBackend(AsyncWorker):
+    """Thread-based workers."""
+    def __init__(self, seq, num_workers=0, init_fn=None):
+        if num_workers <= 0:
+            num_workers = multiprocessing.cpu_count() - num_workers
+        if num_workers <= 0:
+            raise ValueError("at least one worker required")
+
+        self.job_queue = queue.Queue()
+        self.done_queue = queue.Queue()
+
+        self.workers = []
+        for _ in range(num_workers):
+            process = threading.Thread(
+                target=self.__class__.worker,
+                args=(seq, self.job_queue, self.done_queue, init_fn),
+                daemon=True)
+            process.start()
+            self.workers.append(process)
+
+        # set cleanup hooks
+        def cleanup(job_queue, workers):
+            for _ in workers:
+                job_queue.put(-1)
+            for w in workers:
+                w.join()
+
+        finalize(self, cleanup, self.job_queue, self.workers)
+
+    def submit_job(self, item):
+        self.job_queue.put(item)
+
+    def wait_completion(self):
+        return self.done_queue.get()
+
+    @staticmethod
+    def worker(seq, job_queue, done_queue, init_fn):
+        if init_fn is not None:
+            init_fn()
+
+        seterr('passthrough')
+
+        while True:
+            # acquire job
+            idx = job_queue.get()
+
+            if idx < 0:  # stop on sentinel value
+                return
+
+            # collect value (or error trying)
+            try:
+                value = seq[idx]
+            except Exception as e:
+                value = e
+                success = False
+            else:
+                success = True
+
+            # notify about job completion
+            done_queue.put((idx, success, value))
+
+
+# ---------------------------------------------------------------------------------------
+
+def reraise_err(item, error, stack_desc=None):
+    """(re)Raise an evaluation error with contextual debug info."""
+
+    msg = "failed to evaluate item {}".format(item)
+    if stack_desc:
+        msg += " in prefetch created at :\n{}".format(stack_desc)
+
+    if isinstance(error, str):
+        msg += "\n\noriginal error was:\n{}".format(error)
+        raise EvaluationError(msg)
+
+    elif seterr() == "passthrough":
+        raise error
+
+    else:
+        raise EvaluationError(msg) from error
+
+
+class Prefetch:
+    """Manage asynchronous workers to expose an ordered prefetched sequence."""
+
+    def __init__(self, size, backend, buffer_size, init_stack=None):
+        self.size = size
+        self.backend = backend
+        self.creation_stack = init_stack
+
+        self.jobs = []  # active jobs, queued or completed
+        self.completed = {}
+
+        for i in range(buffer_size):
+            self.backend.submit_job(i)
+            self.jobs.append(i)
 
     def __len__(self):
-        return len(self.async_seq)
+        return self.size
 
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
 
     def __getitem__(self, item):
-        # TODO: manage slices
-        if not isint(item):
-            raise TypeError(
-                self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + item.__class__.__name__)
+        # non-monotonic request
+        if item != self.jobs[0]:
+            for _ in range(len(self.jobs) - len(self.completed)):
+                self.backend.wait_completion()
 
-        if item < -len(self) or item >= len(self):
-            raise IndexError(
-                self.__class__.__name__ + " index out of range")
+            self.completed.clear()
 
-        if item < 0:
-            item = len(self) + item
+            self.jobs = list(range(item, item + len(self.jobs)))
+            for i in self.jobs:
+                self.backend.submit_job(i)
 
-        # unexpected request
-        if item != self.todo[self.first_slot]:
-            # reassign targets
-            self.first_slot = 0
-            self.todo[0] = item
-            for i in range(1, self.max_cached):
-                self.todo[i] = self.anticipate(self.todo[i - 1])
-            for i in range(0, self.max_cached):
-                if self.status[i] != JobStatus.QUEUED:
-                    self._start_job(i)
+        # retrieve item, buffer other results
+        while item not in self.completed:
+            idx, success, value = self.backend.wait_completion()
+            self.completed[idx] = success, value
+
+        self.backend.submit_job(item + len(self.jobs))
+        self.jobs.append(item + len(self.jobs))
+
+        # return value
+        self.jobs.pop(0)
+        success, value = self.completed.pop(item)
+        if success:
+            return value
         else:
-            last_slot = (self.first_slot - 1) % self.max_cached
-            todo = self.anticipate(self.todo[(last_slot - 1) % self.max_cached])
-            self.todo[last_slot] = todo
-            if self.status[last_slot] == JobStatus.QUEUED:
-                raise AssertionError
-            self._start_job(last_slot)
-
-        # fetch results until we have the requested one
-        while self.status[self.first_slot] == JobStatus.QUEUED:
-            idx, slot, status = self.async_seq.next_completion()
-            if idx != self.todo[slot]:  # slot was reassigned
-                self._start_job(slot)
-                continue
-            else:
-                self.status[slot] = status
-
-        # handle errors
-        if self.status[self.first_slot] == JobStatus.FAILED:
-            msg = "failed to prefetch item {} in {} created at:\n{}".format(
-                self.todo[self.first_slot],
-                self.__class__.__name__,
-                self.creation_stack)
-            cause = self.async_seq.read_error(self.first_slot)
-            if cause is not None:
-                if passthrough() or isinstance(cause, EvaluationError):
-                    raise cause
-                else:
-                    raise_from(EvaluationError(msg), cause)
-            else:
-                raise EvaluationError(msg)
-
-        else:  # or return buffer slot
-            out = self.async_seq.read_value(self.first_slot)
-            self.first_slot = (self.first_slot + 1) % self.max_cached
-            return out
-
-    def _start_job(self, slot):
-        self.async_seq.enqueue(self.todo[slot], slot)
-        self.status[slot] = JobStatus.QUEUED
+            reraise_err(item, value, self.creation_stack)
 
 
-class AsyncSequence(object):
-    """Asynchronous container with a small local buffer and multiple workers.
-
-    Items from this container must be requested by queuing a job with
-    :func:`enqueue`, they will be transfered asynchronously at the
-    requested buffer slot by a background worker.
-
-    Calling :func:`next_completion` will block until a job is
-    completed, its result is then accessible using :func:`read_value`.
-    """
-    def __init__(self, sequence, job_queue, done_queue,
-                 values_cache, errors_cache,
-                 worker_t, nworkers=0, timeout=1.,
-                 start_hook=None):
-        if nworkers < 1:
-            nworkers += multiprocessing.cpu_count()
-        if nworkers <= 0:
-            raise ValueError("need at least one worker")
-
-        self.timeout = timeout
-        self.sequence = sequence
-        self.start_hook = start_hook
-        self.job_queue = job_queue
-        self.done_queue = done_queue
-
-        # buffers
-        self.values_slots = values_cache
-        self.errors_slots = errors_cache
-
-        # workers
-        self.worker_t = worker_t
-        self.workers = [None] * nworkers
-        for i in range(nworkers):
-            self._start_worker(i)
-
-        # ensure clean termination in any situation
-        finalize(self, AsyncSequence._finalize, self)
-
-    @staticmethod
-    def _finalize(obj):
-        while True:  # clear job submission queue
-            try:
-                obj.job_queue.get(timeout=0.05)
-            except (queue.Empty, IOError, EOFError):
-                break
-
-        for _ in obj.workers:
-            try:
-                obj.job_queue.put((0, -1))
-            except (IOError, EOFError):
-                pass
-
-        for worker in obj.workers:
-            worker.join()
-
-    def _start_worker(self, i):
-        if self.workers[i] is not None:
-            self.workers[i].join()
-        self.workers[i] = self.worker_t(
-            target=self._target,
-            args=(i, self.sequence, self.values_slots, self.errors_slots,
-                  self.job_queue, self.done_queue,
-                  self.timeout, self.start_hook))
-        old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        self.workers[i].start()
-        signal.signal(signal.SIGINT, old_sig_hdl)
-
-    def __len__(self):
-        return len(self.sequence)
-
-    def enqueue(self, item, slot):
-        """Request retrieval of sequence item into given buffer slot."""
-        self.job_queue.put((item, slot), timeout=1)
-
-    def next_completion(self):
-        """Block until completion of any job.
-
-        Return:
-            (int, int, JobStatus): index of computed value, buffer slot,
-            and job status.
-        """
-        idx, slot, status = self.done_queue.get()
-        while slot < 0:
-            self._start_worker(-slot - 1)
-            idx, slot, status = self.done_queue.get()
-        return idx, slot, status
-
-    def read_value(self, slot):
-        """Return the content of the buffer at the given slot."""
-        return self.values_slots[slot]
-
-    def read_error(self, slot):
-        """Return the error that was raised while performing a job.
-
-        Args:
-            slot (int): the slot associated to the failed job.
-        Return:
-             Optional[Exception]: the exception object or `None` if it
-             could not be retrieved.
-        """
-        error, trace_dump = self.errors_slots[slot]
-        self.errors_slots[slot] = (None, None)
-
-        if error is not None:
-            return with_traceback(error, trace_dump.as_traceback())
-        else:
-            return None
-
-    @staticmethod
-    def _target(pid, sequence, value_slots, error_slots, job_queue, done_queue,
-                timeout, start_hook):
-        logger = get_logger(__name__)
-
-        def terminate(reason=None):
-            if reason is not None:
-                logger.debug("worker %d: %s", pid, reason)
-
-            logger.debug("worker %d: exiting", pid)
-
-            sys.exit(0)
-
-        seterr(evaluation='passthrough')
-        if start_hook is not None:
-            start_hook()
-
-        while True:
-            try:  # acquire job
-                idx, slot = job_queue.get(timeout=timeout)
-
-            except queue.Empty:  # or go to sleep
-                try:  # notify parent
-                    done_queue.put((0, -pid - 1, 0))
-                finally:
-                    terminate("timeout")
-
-            except IOError as e:  # parent probably died
-                terminate(str(e))
-
-            if slot < 0:  # terminate
-                terminate("received termination signal")
-
-            try:
-                value_slots[slot] = sequence[idx]
-                job_status = JobStatus.DONE
-
-            except Exception as error:  # save error informations if any
-                try:
-                    trace_dump = tblib.Traceback(sys.exc_info()[2])
-                    error_slots[slot] = error, trace_dump
-                except Exception:
-                    try:
-                        error_slots[slot] = None, None
-                    except IOError as e:
-                        terminate(str(e))
-
-                job_status = JobStatus.FAILED
-
-            try:  # notify about job termination
-                done_queue.put((idx, slot, job_status))
-
-            except IOError as e:  # parent probably died
-                terminate(str(e))
-
-
-def prefetch(sequence, max_buffered,
-             nworkers=0, method='thread', timeout=1.,
-             start_hook=None, anticipate=None):
+def prefetch(seq, nworkers=0, max_buffered=10, method="thread", start_hook=None):
     """Wrap a sequence to prefetch values ahead using background workers.
 
-    This function breaks the on-demand execution principle used in this
-    library but does so transparently using background workers.
-    Every time an element of this container is accessed, the following ones are
-    queued for computation as well and will be available sooner when needed.
-    This is ideally placed at the end of a transformation pipeline
-    when all items must be evaluated in succession.
+    Every time an element of this container is accessed, the following
+    ones are queued for evaluation by background workers. This is
+    ideally placed at the end of a transformation pipeline when all
+    items are to be evaluated in succession.
 
     .. image:: _static/prefetch.png
        :alt: gather
@@ -313,14 +503,13 @@ def prefetch(sequence, max_buffered,
        :align: center
 
     Args:
-        sequence (Sequence):
+        seq (Sequence):
             The data source.
-        max_buffered (Optional[int]):
-            Optional limit on the number of prefetched values at any
-            time (default None).
         nworkers (int):
             Number of workers, negative values or zero indicate the
             number of cpu cores to spare (default 0).
+        max_buffered (Optional[int]):
+            limit on the number of prefetched values at any time (default 10).
         method (str):
             Type of workers:
 
@@ -330,51 +519,44 @@ def prefetch(sequence, max_buffered,
             * `'process'` uses :class:`python:multiprocessing.Process`
               which provides full parallelism but adds communication
               overhead between workers and the parent process.
+            * `'sharedmem'` also uses processes but with shared memory
+              between workers and the main process which features
+              zero-copy transfers.
+              This adds several limitations however:
+
+              - References to the returned items must be deleted to allow
+                recycling of the memory slots (for example the items can be
+                read as for loop variables and therefore erase at every
+                iteration).
+              - All items must be buffers of identical shape and type (ex:
+                :ref:`np.ndarray <numpy:arrays>`), tuples or dicts
+                of buffers are also supported.
+              - A fairly large value for `max_buffer` is recommended to avoid
+                draining all memory slots before the garbage collector releases
+                them.
 
             Defaults to `'thread'`.
-        timeout (float):
-            Maximum idling worker time in seconds, workers will be
-            restarted automatically if needed (default 1).
         start_hook (Optional[Callable]):
             Optional callback run by workers on start.
-        anticipate (Optional[Callable[[int], int]]):
-            An optional callable which takes an index and returns the
-            index which is the most likely to be requested next.
 
     Returns:
         Sequence: The wrapped sequence.
     """
-    if method == "thread":
-        job_queue = queue.Queue(maxsize=max_buffered + nworkers)
-        done_queue = queue.Queue(maxsize=max_buffered + nworkers)
-        values_cache = [None] * max_buffered
-        errors_cache = [None] * max_buffered
-        worker_t = threading.Thread
-        async_seq = AsyncSequence(
-            sequence, job_queue, done_queue, values_cache, errors_cache,
-            worker_t, nworkers, timeout, start_hook)
-        return PrefetchedSequence(
-            async_seq, max_buffered, timeout, anticipate)
-    elif method in ("process", "proc"):
-        job_queue = SharedCtypeQueue("Ll", maxsize=max_buffered + nworkers)
-        done_queue = SharedCtypeQueue("Llb", maxsize=max_buffered + nworkers)
-        values_cache = SharedList([None] * max_buffered)
-        errors_cache = SharedList([None, None] * max_buffered)
-        worker_t = multiprocessing.Process
-        async_seq = AsyncSequence(
-            sequence, job_queue, done_queue, values_cache, errors_cache,
-            worker_t, nworkers, timeout, start_hook)
-        return PrefetchedSequence(
-            async_seq, max_buffered, timeout, anticipate)
+    if nworkers == 0:
+        return seq
+    elif method == "thread":
+        backend = ThreadBackend(
+            seq, num_workers=nworkers, init_fn=start_hook)
+    elif method == "process":
+        backend = ProcessBackend(
+            seq, num_workers=nworkers, init_fn=start_hook)
+    elif method == "sharedmem":
+        backend = SHMProcessBacked(
+            seq, num_workers=nworkers, buffer_size=max_buffered, init_fn=start_hook)
+        max_buffered = max_buffered // 2  # limit strain on GC to recycle buffer slots
     else:
-        raise ValueError("unsupported method")
+        raise ValueError("invalid prefetching method")
 
-
-def eager_iter(sequence, nworkers=None, max_buffered=None, method='thread'):
-    """Return worker-backed sequence iterator (deprecated)."""
-    logger = get_logger(__name__)
-    logger.warning(
-        "Call to deprecated function eager_iter, use prefetch instead",
-        category=DeprecationWarning,
-        stacklevel=2)
-    return iter(prefetch(sequence, nworkers, max_buffered, method))
+    return Prefetch(len(seq), backend,
+                    buffer_size=max_buffered,
+                    init_stack=format_stack())

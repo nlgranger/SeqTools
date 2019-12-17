@@ -1,10 +1,19 @@
-import random
 import logging
+import os
+import platform
+import random
+import signal
+import sys
+import tempfile
+import cProfile
+from multiprocessing import Process
 from time import sleep, time
+
+import numpy as np
 import pytest
+from numpy.testing import assert_array_equal
 
 from seqtools import smap, prefetch, EvaluationError, seterr
-
 
 logging.basicConfig(level=logging.DEBUG)
 seed = int(random.random() * 100000)
@@ -12,8 +21,8 @@ seed = int(random.random() * 100000)
 random.seed(seed)
 
 
+@pytest.mark.parametrize("method", ["thread", "process", "sharedmem"])
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch(method):
     def f1(x):
         sleep(0.005 * (1 + random.random()))
@@ -24,63 +33,53 @@ def test_prefetch(method):
     else:
         start_hook = None
 
-    arr = list(range(300))
+    arr = np.random.rand(100, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=4, max_buffered=10, method=method, timeout=1,
-                 start_hook=start_hook)
-
-    # check if workers are properly restarted when asleep
-    i = 0
-    n_wakeups = 3
-    for _ in range(500):
-        if n_wakeups > 0 and random.random() < 0.005:
-            sleep(1.1)  # will let worker go to sleep
-            n_wakeups -= 1
-        value = y[i]
-        assert value == arr[i]
-        if random.random() < 0.05:
-            i = random.randrange(0, len(arr))
-        else:
-            i = (i + 1) % len(arr)
-
-    # helps with coverage
-    y.async_seq._finalize(y.async_seq)
+    y = prefetch(y, nworkers=4, max_buffered=10, method=method, start_hook=start_hook)
+    y = [y_.copy() for y_ in y]  # copy needed to release buffers when method=sharedmem
+    assert_array_equal(np.stack(y), arr)
 
     # overly large buffer
-    arr = list(range(10))
+    arr = np.random.rand(10, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=4, max_buffered=50, method=method, timeout=1)
-    assert list(y) == arr
+    y = prefetch(y, nworkers=4, max_buffered=50, method=method)
+    y = [y_.copy() for y_ in y]
+    assert_array_equal(np.stack(y), arr)
 
-    # anticipate method
-    arr = list(range(200))
+    # multiple restarts
+    arr = np.random.rand(100, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=2, max_buffered=20, method=method,
-                 timeout=1, anticipate=lambda i: i + 2)
-
-    z = [y[i] for i in range(0, len(y), 2)]
-
-    assert z == arr[::2]
+    y = prefetch(y, nworkers=4, max_buffered=10, method=method)
+    for _ in range(10):
+        n = np.random.randint(0, 99)
+        for i in range(n):
+            assert_array_equal(y[i], arr[i])
 
 
 @pytest.mark.no_cover
+@pytest.mark.parametrize("method", ["thread", "process", "sharedmem"])
 @pytest.mark.timeout(15)
-@pytest.mark.parametrize("method", ["thread", "process"])
 def test_prefetch_timing(method):
     def f1(x):
         sleep(.02 + 0.01 * (random.random() - .5))
         return x
 
-    arr = list(range(420))
+    arr = np.random.rand(420, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=2, max_buffered=20, method=method, timeout=1)
+    y = prefetch(y, nworkers=2, max_buffered=40, method=method)
 
     for i in range(20):
         y[i]  # consume first items to eliminate worker startup time
+
+    pr = cProfile.Profile()
+
+    pr.enable()
     t1 = time()
     for i in range(20, 420):
         y[i]
     t2 = time()
+    pr.disable()
+    pr.dump_stats("/tmp/prefetch.prof")
 
     duration = t2 - t1
     print("test_prefetch_timing({}) {:.2f}s".format(method, duration))
@@ -88,10 +87,10 @@ def test_prefetch_timing(method):
     assert duration < 4.5
 
 
-@pytest.mark.timeout(10)
-@pytest.mark.parametrize("method", ["thread", "process"])
+@pytest.mark.parametrize("method", ["thread", "process", "sharedmem"])
 @pytest.mark.parametrize("evaluation", ["wrap", "passthrough"])
 @pytest.mark.parametrize("picklable_err", [False, True])
+@pytest.mark.timeout(10)
 def test_prefetch_errors(method, evaluation, picklable_err):
     class CustomError(Exception):
         pass
@@ -102,18 +101,91 @@ def test_prefetch_errors(method, evaluation, picklable_err):
         else:
             return x
 
-    arr1 = [1, 2, 3, None]
+    arr1 = [np.random.rand(10), np.random.rand(10), np.random.rand(10), None]
     arr2 = smap(f1, arr1)
-    y = prefetch(arr2, nworkers=2, max_buffered=2, method=method)
+    y = prefetch(arr2, nworkers=2, max_buffered=4, method=method)
 
     seterr(evaluation)
-    if (method == "process" and not picklable_err) or evaluation == "wrap":
+    if (method != "thread" and not picklable_err) or evaluation == "wrap":
         error_t = EvaluationError
     else:
         error_t = ValueError if picklable_err else CustomError
 
     for i in range(3):
-        assert y[i] == arr1[i]
-    with pytest.raises(error_t):
+        assert_array_equal(y[i], arr1[i])
+    try:
         a = y[3]
-        del a
+    except Exception as e:
+        assert type(e) == error_t
+
+
+def check_pid(pid):
+    """ Check For the existence of a unix pid. """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
+
+
+@pytest.mark.parametrize("method", ["process", "sharedmem"])
+@pytest.mark.timeout(10)
+def test_prefetch_crash(method):
+    if platform.python_implementation() == "PyPy":
+        pytest.skip("broken with pypy")
+
+    # worker dies
+    with tempfile.TemporaryDirectory() as d:
+        def init_fn():
+            signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
+            with open('{}/{}'.format(d, os.getpid()), "w"):
+                pass
+
+        def f1(x):
+            sleep(.02 + 0.01 * (random.random() - .5))
+            return x
+
+        arr = np.random.rand(1000, 10)
+        y = smap(f1, arr)
+        y = prefetch(y, method=method, max_buffered=40,
+                     nworkers=4, start_hook=init_fn)
+
+        sleep(0.1)
+
+        while True:
+            if len(os.listdir(d)) > 0:
+                os.kill(int(os.listdir(d)[0]), signal.SIGUSR1)
+                break
+
+        with pytest.raises(RuntimeError):
+            for i in range(0, 1000):
+                a = y[i]
+
+    # parent dies
+    with tempfile.TemporaryDirectory() as d:
+        def init_fn():
+            signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
+            with open('{}/{}'.format(d, os.getpid()), "w"):
+                pass
+
+        def target():
+            arr = np.random.rand(1000, 10)
+            y = smap(f1, arr)
+            y = prefetch(y, method=method, max_buffered=40,
+                         nworkers=4, start_hook=init_fn)
+
+            for i in range(0, 1000):
+                a = y[i]
+
+        p = Process(target=target)
+        p.start()
+
+        while len(os.listdir(d)) < 4:
+            sleep(0.05)
+
+        os.kill(p.pid, signal.SIGUSR1)
+        sleep(2)  # wait for workers to time out
+
+        for pid in map(int, os.listdir(d)):
+            assert not check_pid(pid)

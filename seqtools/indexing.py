@@ -1,8 +1,7 @@
-from numbers import Integral
-import itertools
 import bisect
+import itertools
 from array import array
-from future.builtins import range
+from numbers import Integral
 
 from .utils import isint, basic_getitem, basic_setitem, normalize_slice, \
     get_logger
