@@ -1,3 +1,5 @@
+import sys
+import collections
 from functools import singledispatch
 
 
@@ -21,7 +23,7 @@ def pack(data, buffer, offset=0):
 
 @pack.register(dict)
 def _(data, buffer, offset=0):
-    for v in data.values():
+    for _, v in sorted(data.items()):
         offset = pack(v, buffer, offset)
 
     return offset
@@ -43,7 +45,7 @@ def unpack(model, buffer, offset=0):
 @unpack.register(dict)
 def _(model, buffer, offset=0):
     out = {}
-    for k, v in model.items():
+    for k, v in sorted(model.items()):
         out[k], offset = unpack(v, buffer, offset)
     return out, offset
 

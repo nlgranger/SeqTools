@@ -88,7 +88,7 @@ def test_packing():
         elif isinstance(b, dict):
             assert set(a.keys()) == set(b.keys())
             # insertion order matters
-            for va, vb in zip(a.values(), b.values()):
+            for (_, va), (_, vb) in zip(sorted(a.items()), sorted(b.items())):
                 check_equal(va, vb)
         elif isinstance(b, tuple):
             assert len(a) == len(b)
@@ -96,6 +96,7 @@ def test_packing():
                 check_equal(va, vb)
 
     # test (un)packing
+    sample_items[-1] = dict(sorted(sample_items[-1].items())[::-1])
     for sample in sample_items:
         size = packed_size(sample)
         buffer = np.empty(size, dtype='b')
