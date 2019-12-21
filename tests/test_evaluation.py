@@ -49,11 +49,19 @@ def test_prefetch(method):
     # multiple restarts
     arr = np.random.rand(100, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=4, max_buffered=10, method=method)
+    y = prefetch(y, nworkers=-1, max_buffered=10, method=method)
     for _ in range(10):
         n = np.random.randint(0, 99)
         for i in range(n):
             assert_array_equal(y[i], arr[i])
+
+    # starvation
+    arr = np.random.rand(100, 10)
+    y = prefetch(arr, nworkers=2, max_buffered=10, method=method)
+    y[0]
+    sleep(2)
+    for i in range(1, 100):
+        assert_array_equal(y[i], arr[i])
 
 
 @pytest.mark.no_cover
@@ -88,10 +96,10 @@ def test_prefetch_timing(method):
 
 
 @pytest.mark.parametrize("method", ["thread", "process", "sharedmem"])
-@pytest.mark.parametrize("evaluation", ["wrap", "passthrough"])
+@pytest.mark.parametrize("error_mode", ["wrap", "passthrough"])
 @pytest.mark.parametrize("picklable_err", [False, True])
 @pytest.mark.timeout(10)
-def test_prefetch_errors(method, evaluation, picklable_err):
+def test_prefetch_errors(method, error_mode, picklable_err):
     class CustomError(Exception):
         pass
 
@@ -105,8 +113,8 @@ def test_prefetch_errors(method, evaluation, picklable_err):
     arr2 = smap(f1, arr1)
     y = prefetch(arr2, nworkers=2, max_buffered=4, method=method)
 
-    seterr(evaluation)
-    if (method != "thread" and not picklable_err) or evaluation == "wrap":
+    seterr(error_mode)
+    if (method != "thread" and not picklable_err) or error_mode == "wrap":
         error_t = EvaluationError
     else:
         error_t = ValueError if picklable_err else CustomError
@@ -117,6 +125,21 @@ def test_prefetch_errors(method, evaluation, picklable_err):
         a = y[3]
     except Exception as e:
         assert type(e) == error_t
+
+    if (method == "process" or method == "sharedmem") and error_mode == "passthrough":
+        class CustomObject:  # unpicklable object
+            pass
+
+        arr1 = [np.random.rand(10), CustomObject(), np.random.rand(10)]
+        y = prefetch(arr1, nworkers=2, max_buffered=4, method=method)
+        with pytest.raises(ValueError):
+            y[1]
+
+    if method == "sharedmem":
+        arr = np.random.randn(1000, 100)
+        y = prefetch(arr, nworkers=2, max_buffered=50, method=method)
+        with pytest.raises(MemoryError):
+            list(y)
 
 
 def check_pid(pid):

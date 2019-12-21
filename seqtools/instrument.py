@@ -1,10 +1,6 @@
 """Debugging tools."""
 
-try:
-    from time import monotonic, perf_counter
-except ImportError:
-    from monotonic import monotonic
-    perf_counter = monotonic
+from time import monotonic, perf_counter
 
 from .utils import isint, basic_getitem
 
