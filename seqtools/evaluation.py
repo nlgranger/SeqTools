@@ -8,7 +8,7 @@ import signal
 import threading
 import time
 from abc import ABC, abstractmethod
-from weakref import finalize
+import weakref
 
 try:
     from torch import multiprocessing
@@ -21,7 +21,7 @@ from tblib import pickling_support
 from .errors import format_stack, EvaluationError, seterr
 from .memory import packed_size, pack, unpack
 from .utils import get_logger
-from .C.memory import RefCountedBuffer
+from .C.refcountedbuffer import RefCountedBuffer
 
 
 pickling_support.install()
@@ -73,8 +73,8 @@ class ProcessBackend(AsyncWorker):
         worker_monitor.start()
 
         # set cleanup hooks
-        finalize(self, ProcessBackend.cleanup,
-                 self.job_queue, self.workers, worker_monitor)
+        weakref.finalize(self, ProcessBackend.cleanup,
+                         self.job_queue, self.workers, worker_monitor)
 
     def submit_job(self, item):
         self.job_queue.put(item)
@@ -170,40 +170,33 @@ class BufferRecycler:
     def __init__(self, buffers):
         self.buffers = buffers
         self.buffer_queue = queue.Queue(maxsize=len(buffers))
-        terminated = threading.Event()
         for i, buf in enumerate(buffers):
             cb = functools.partial(
                 BufferRecycler.recycle,
                 buffer_idx=i,
-                buffer_queue=self.buffer_queue,
-                terminated=terminated)
+                buffer_queue=self.buffer_queue)
             rcbuf = RefCountedBuffer(buf, cb)
             self.buffer_queue.put((i, rcbuf))
-
-        finalize(self, BufferRecycler.finalize, terminated)
 
     def fetch(self):
         try:
             i, buf = self.buffer_queue.get_nowait()
-            return i, memoryview(buf)
         except queue.Empty:
             pass
+        else:
+            return i, memoryview(buf)
 
         gc.collect()
         try:
             i, buf = self.buffer_queue.get_nowait()
-            return i, memoryview(buf)
         except queue.Empty:
             raise MemoryError("none of the buffers has been release yet.") from None
+        else:
+            return i, memoryview(buf)
 
     @staticmethod
-    def recycle(buffer, buffer_idx, buffer_queue, terminated):
-        if not terminated.is_set():
-            buffer_queue.put_nowait((buffer_idx, buffer))
-
-    @staticmethod
-    def finalize(terminated):
-        terminated.set()
+    def recycle(buffer, buffer_idx, buffer_queue):
+        buffer_queue.put_nowait((buffer_idx, buffer))
 
 
 class SHMProcessBacked(AsyncWorker):
@@ -251,8 +244,8 @@ class SHMProcessBacked(AsyncWorker):
         worker_monitor.start()
 
         # set cleanup hooks
-        finalize(self, SHMProcessBacked.cleanup,
-                 self.job_queue, self.workers, worker_monitor)
+        weakref.finalize(self, SHMProcessBacked.cleanup,
+                         self.job_queue, self.workers, worker_monitor)
 
     def submit_job(self, item):
         try:
@@ -260,7 +253,7 @@ class SHMProcessBacked(AsyncWorker):
         except MemoryError as e:
             if any(not w.is_alive() for w in self.workers):
                 raise RuntimeError("worker died unexpetedly")
-            raise e from None
+            raise e
         else:
             self.job_queue.put((item, slot))
 
@@ -383,7 +376,7 @@ class ThreadBackend(AsyncWorker):
             for w in workers:
                 w.join()
 
-        finalize(self, cleanup, self.job_queue, self.workers)
+        weakref.finalize(self, cleanup, self.job_queue, self.workers)
 
     def submit_job(self, item):
         self.job_queue.put(item)

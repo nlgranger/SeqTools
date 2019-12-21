@@ -22,6 +22,20 @@ typedef struct {
 
 // Python type implementation -------------------------------------------------
 
+static PyObject *
+RefCountedBuffer_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    RefCountedBufferObject *self;
+    self = (RefCountedBufferObject *) type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->array = NULL;
+        Py_INCREF(Py_None);
+        self->cb = Py_None;
+        self->refcount = 0;
+    }
+    return (PyObject *) self;
+}
+
 static int
 RefCountedBuffer_traverse(RefCountedBufferObject *self, visitproc visit, void *arg)
 {
@@ -44,19 +58,6 @@ RefCountedBuffer_dealloc(RefCountedBufferObject *self)
     PyObject_GC_UnTrack(self);
     RefCountedBuffer_clear(self);
     Py_TYPE(self)->tp_free((PyObject *) self);
-}
-
-static PyObject *
-RefCountedBuffer_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    RefCountedBufferObject *self;
-    self = (RefCountedBufferObject *) type->tp_alloc(type, 0);
-    if (self != NULL) {
-        self->array = NULL;
-        self->cb = NULL;
-        self->refcount = 0;
-    }
-    return (PyObject *) self;
 }
 
 static int
@@ -104,6 +105,10 @@ RefCountedBuffer_getbuffer(PyObject *obj, Py_buffer *view, int flags)
 void
 RefCountedBuffer_releasebuffer(PyObject* obj, Py_buffer *view)
 {
+    // Save the current exception, if any
+    PyObject *error_type, *error_value, *error_traceback;
+    PyErr_Fetch(&error_type, &error_value, &error_traceback);
+
     RefCountedBufferObject* self = (RefCountedBufferObject*) obj;
 
     // Unwrap buffer
@@ -117,22 +122,28 @@ RefCountedBuffer_releasebuffer(PyObject* obj, Py_buffer *view)
 
     // Trigger callback if needed
     self->refcount--;
-    if (self->refcount == 0 && self->cb != NULL && self->cb != Py_None) {
+    if (self->refcount == 0 && self->cb != Py_None) {
         PyObject *arglist;
         PyObject *result;
+
         arglist = Py_BuildValue("(O)", obj);
+        PyErr_Clear();
         result = PyObject_CallObject(self->cb, arglist);
         Py_DECREF(arglist);
+
+        if (result == NULL) {  // callback raised, we can only print the error
+            fprintf(stderr, "RefCountedBuffer encountered an error in the callback:\n");
+            PyErr_Print();
+        }
+
         Py_XDECREF(result);
     }
 
     // Refcount to self is decreased by PyBuffer_Release
-}
 
-static PyBufferProcs RefCountedBuffer_as_buffer = {
-  (getbufferproc)RefCountedBuffer_getbuffer,
-  (releasebufferproc)RefCountedBuffer_releasebuffer,
-};
+    // Restore current exception, if any
+    PyErr_Restore(error_type, error_value, error_traceback);
+}
 
 
 // Methods --------------------------------------------------------------------
@@ -159,53 +170,30 @@ RefCountedBuffer_init(RefCountedBufferObject *self, PyObject *args, PyObject *kw
     self->array = array;
     Py_XDECREF(tmp);
 
-    if (cb != NULL) {
-        Py_INCREF(cb);
-        self->cb = cb;
-    }
-
-    return 0;
-}
-
-
-static PyObject *
-RefCountedBuffer_set_cb(RefCountedBufferObject *self, PyObject *args, PyObject *kwds)
-{
-    PyObject* cb = NULL;
-    PyObject* tmp = NULL;
-
-    static char *kwlist[] = {"cb", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &cb)) {
-        return NULL;
-    }
-    if (!PyCallable_Check(cb)) {
-        PyErr_SetString(PyExc_TypeError, "cb must be callable");
-        return NULL;
-    }
-
+    cb = cb != NULL ? cb : Py_None;
     Py_INCREF(cb);
     tmp = self->cb;
     self->cb = cb;
     Py_XDECREF(tmp);
 
-    Py_RETURN_NONE;
+    return 0;
 }
 
 
 // Type registration ----------------------------------------------------------
 
-static PyMethodDef RefCountedBuffer_methods[] = {
-    {"set_cb", (PyCFunction) RefCountedBuffer_set_cb, METH_VARARGS | METH_KEYWORDS,
-     "Set callback for refcount 0 events."
-    },
-    {NULL}
+static PyBufferProcs RefCountedBuffer_as_buffer = {
+  (getbufferproc)RefCountedBuffer_getbuffer,
+  (releasebufferproc)RefCountedBuffer_releasebuffer,
 };
+
 
 static PyMemberDef RefCountedBuffer_members[] = {
     {"cb", T_OBJECT_EX, offsetof(RefCountedBufferObject, cb), 0,
      "refcount 0 callback"},
     {NULL}
 };
+
 
 static PyTypeObject RefCountedBufferType = {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -219,7 +207,6 @@ static PyTypeObject RefCountedBufferType = {
     .tp_dealloc = (destructor) RefCountedBuffer_dealloc,
     .tp_traverse = (traverseproc) RefCountedBuffer_traverse,
     .tp_clear = (inquiry) RefCountedBuffer_clear,
-    .tp_methods = RefCountedBuffer_methods,
     .tp_members = RefCountedBuffer_members,
     .tp_as_buffer = &RefCountedBuffer_as_buffer,
 };
@@ -229,13 +216,14 @@ static PyTypeObject RefCountedBufferType = {
 
 static PyModuleDef memory = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "seqtools.C.memory",
-    .m_doc = "Low level buffer tools.",
+    .m_name = "seqtools.C.refcountedbuffer",
+    .m_doc = "Wrapper around buffer objects with settable callback.",
     .m_size = -1,
 };
 
+
 PyMODINIT_FUNC
-PyInit_memory(void)
+PyInit_refcountedbuffer(void)
 {
     PyObject *m;
     if (PyType_Ready(&RefCountedBufferType) < 0)
