@@ -20,7 +20,7 @@ processing into a simple sequence wrapper.
 from .evaluation import prefetch
 from .errors import EvaluationError, seterr
 from .buffering import add_cache
-from .indexing import arange, case, gather, take, reindex, cycle, interleave, \
+from .indexing import arange, case, gather, take, cycle, interleave, \
     repeat, switch
 from .mapping import smap, starmap
 from .serialization import SerializableFunc
@@ -31,7 +31,7 @@ __all__ = [
     'prefetch',
     'EvaluationError', 'seterr',
     'add_cache',
-    'arange', 'case', 'gather', 'take', 'reindex', 'cycle', 'interleave',
+    'arange', 'case', 'gather', 'take', 'cycle', 'interleave',
     'repeat', 'switch',
     'smap', 'starmap',
     'collate', 'concatenate', 'batch', 'unbatch', 'split']

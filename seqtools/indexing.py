@@ -3,8 +3,7 @@ import itertools
 from array import array
 from numbers import Integral
 
-from .utils import isint, basic_getitem, basic_setitem, normalize_slice, \
-    get_logger
+from .utils import isint, basic_getitem, basic_setitem, normalize_slice
 
 
 class Arange:
@@ -139,15 +138,6 @@ def gather(sequence, indexes):
 
 def take(sequence, indexes):
     """Alias for :func:`seqtools.gather`."""
-    return gather(sequence, indexes)
-
-
-def reindex(sequence, indexes):
-    logger = get_logger(__name__)
-    logger.warning(
-        "Call to deprecated function reindex, use gather instead",
-        category=DeprecationWarning,
-        stacklevel=2)
     return gather(sequence, indexes)
 
 
