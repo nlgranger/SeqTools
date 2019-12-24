@@ -1,32 +1,48 @@
 language: python
 cache: pip
-
-python:
-  - "3.5"
-  - "3.7"
-  - "3.8"
-
-before_install:
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then sudo apt-get install -y pandoc; fi
+matrix:
+  include:
+    - python: 3.5
+      env:
+        - TOXENV=py35
+        - CIBW_BUILD=cp35-*
+    - python: 3.6
+      env:
+        - TOXENV=py36
+        - CIBW_BUILD=cp36-*
+    - python: 3.7
+      env:
+        - TOXENV=py37
+        - CIBW_BUILD=cp37-*
+    - python: 3.8
+      env:
+        - TOXENV=py38,doctest
+        - CIBW_BUILD=cp38-*
 
 install:
-  - pip install codecov numpy pytest-cov pytest-timeout
-  - pip install -e .
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.8' ]]; then sudo apt-get install -y pandoc; fi
+  - pip install tox coverage codecov cibuildwheel twine
 
 script:
-  - python setup.py build_ext --inplace
-  - pytest --cov="seqtools" --cov-config="setup.cfg" --cov-report=
-  - coverage xml
-  - codecov --file=coverage.xml
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then pip install nose sphinx ipython ipykernel nbconvert nbsphinx Pillow scikit-learn scipy; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then python -m sphinx -M doctest docs docs/_build; fi
+  - tox
+
+after_success:
+  - tox -e coverage
+  - coverage report xml
+  - codecov
+
+before_deploy:
+  - cibuildwheel --output-dir wheelhouse
 
 deploy:
-  provider: pypi
-  user: $PYPI_USER
-  password: $PYPI_PASS
-  distributions: "sdist bdist_wheel"
-  on:
-    tags: true
-    branch: master
-    python: "3.7"
+  - provider: script
+    skip_cleanup: true
+    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPY_PASSWORD twine upload --skip-existing wheelhouse/*.whl
+    on:
+      tags: true
+  - provider: script
+    skip_cleanup: true
+    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$TESTPYPI_PASSWORD twine upload --skip-existing --repository-url https://test.pypi.org/legacy/ wheelhouse/*.whl
+    on:
+      tags: true
+      all_branches: true

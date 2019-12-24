@@ -64,10 +64,10 @@ def test_prefetch(method):
         assert_array_equal(y[i], arr[i])
 
 
-@pytest.mark.no_cover
+@pytest.mark.xfail
 @pytest.mark.parametrize("method", ["thread", "process", "sharedmem"])
 @pytest.mark.timeout(15)
-def test_prefetch_timing(method):
+def test_prefetch_timing(method):  # pragma: no cover
     def f1(x):
         sleep(.02 + 0.01 * (random.random() - .5))
         return x

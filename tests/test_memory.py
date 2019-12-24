@@ -46,9 +46,8 @@ def test_cached():
     assert duration < .28
 
 
-@pytest.mark.no_cover
 @pytest.mark.timeout(5)
-def test_cached_timing():
+def test_cached_timing():  # pragma: no cover
     def f(x):
         sleep(.01)
         return x

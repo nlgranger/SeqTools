@@ -1,5 +1,7 @@
-global-exclude *.py[cod] __pycache__ *.so .ipynb_checkpoints
+include LICENSE.txt
 include version.py
-graft docs
-prune docs/_build
 graft tests
+graft docs
+global-exclude *.py[cod]
+global-exclude *checkpoint.ipynb
+prune docs/_build

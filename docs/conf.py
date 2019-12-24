@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# LazyProc documentation build configuration file, created by
+# SeqTools documentation build configuration file, created by
 # sphinx-quickstart on Tue Jun 20 23:03:11 2017.
 #
 # This file is execfile()d with the current directory set to its
@@ -42,9 +42,6 @@ extensions = [
     'sphinx.ext.linkcode',
     'sphinx.ext.intersphinx',
     'nbsphinx']
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -186,7 +183,7 @@ def linkcode_resolve(domain, info):
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy', None)}
+    'numpy': ('https://docs.scipy.org/doc/numpy', None)}
 
 
 # -- Options for nbsphinx -----------------------------------------------------

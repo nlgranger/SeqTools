@@ -90,28 +90,28 @@ The library comes with a set of functions to manipulate sequences:
 
 .. |concatenate| image:: docs/_static/concatenate.png
 
-.. _concatenation: reference.html#seqtools.concatenate
+.. _concatenation: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.concatenate
 
 .. |batch| image:: docs/_static/batch.png
 
-.. _batching: reference.html#seqtools.batch
+.. _batching: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.batch
 
 .. |gather| image:: docs/_static/gather.png
 
-.. _reindexing: reference.html#seqtools.gather
+.. _reindexing: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.gather
 
 .. |prefetch| image:: docs/_static/prefetch.png
 
-.. _prefetching: reference.html#seqtools.prefetch
+.. _prefetching: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.prefetch
 
 .. |interleaving| image:: docs/_static/interleaving.png
 
-.. _interleaving: reference.html#seqtools.interleave
+.. _interleaving: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.interleave
 
 ==================== ================= ===============
-| 'concatenation'_   | 'batching'_     | 'reindexing'_
+| `concatenation`_   | `batching`_     | `reindexing`_
 | |concatenate|      | |batch|         | |gather|
-| 'prefetching'_     | 'interleaving'_
+| `prefetching`_     | `interleaving`_
 | |prefetch|         | |interleaving|
 ==================== ================= ===============
 
