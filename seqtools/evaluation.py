@@ -278,6 +278,7 @@ class SHMProcessBacked(AsyncWorker):
             value, _ = unpack(self.sample, self.result_buffers.pop(idx))
             return idx, success, value
         else:
+            self.result_buffers.pop(idx)
             return idx, success, error
 
     @staticmethod
@@ -482,7 +483,7 @@ class Prefetch:
             reraise_err(item, value, self.creation_stack)
 
 
-def prefetch(seq, nworkers=0, max_buffered=10, method="thread", start_hook=None):
+def prefetch(seq, max_buffered=10, nworkers=0, method="thread", start_hook=None):
     """Wrap a sequence to prefetch values ahead using background workers.
 
     Every time an element of this container is accessed, the following
