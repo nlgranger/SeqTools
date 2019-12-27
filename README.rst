@@ -1,5 +1,5 @@
-.. image:: https://badge.fury.io/py/seqtools.svg
-   :target: https://badge.fury.io/py/seqtools
+.. image:: https://badge.fury.io/py/SeqTools.svg
+   :target: https://github.com/nlgranger/SeqTools
    :alt: PyPi package
 .. image:: https://travis-ci.org/nlgranger/SeqTools.svg?branch=master
    :target: https://travis-ci.org/nlgranger/SeqTools
