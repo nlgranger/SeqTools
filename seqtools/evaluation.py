@@ -483,7 +483,7 @@ class Prefetch:
             reraise_err(item, value, self.creation_stack)
 
 
-def prefetch(seq, max_buffered=10, nworkers=0, method="thread", start_hook=None):
+def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None):
     """Wrap a sequence to prefetch values ahead using background workers.
 
     Every time an element of this container is accessed, the following
@@ -502,10 +502,8 @@ def prefetch(seq, max_buffered=10, nworkers=0, method="thread", start_hook=None)
         nworkers (int):
             Number of workers, negative values or zero indicate the
             number of cpu cores to spare (default 0).
-        max_buffered (Optional[int]):
-            limit on the number of prefetched values at any time (default 10).
         method (str):
-            Type of workers:
+            Type of workers (default `'thread'`):
 
             * `'thread'` uses :class:`python:threading.Thread` which
               has low overhead but allows only one active worker at a
@@ -528,8 +526,8 @@ def prefetch(seq, max_buffered=10, nworkers=0, method="thread", start_hook=None)
               - A fairly large value for `max_buffer` is recommended to avoid
                 draining all memory slots before the garbage collector releases
                 them.
-
-            Defaults to `'thread'`.
+        max_buffered (Optional[int]):
+            limit on the number of prefetched values at any time (default 10).
         start_hook (Optional[Callable]):
             Optional callback run by workers on start.
 

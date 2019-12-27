@@ -37,7 +37,7 @@ before_deploy:
 deploy:
   - provider: script
     skip_cleanup: true
-    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPY_PASSWORD twine upload --skip-existing wheelhouse/*.whl
+    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_PASSWORD twine upload --skip-existing wheelhouse/*.whl
     on:
       tags: true
   - provider: script

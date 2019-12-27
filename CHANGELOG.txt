@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2019-12-27
+### Added
+- prefteching using shared memory for zero-copy data transfer
+- case and switch functions
+
+### Changed
+- prefetch workers no longer outlive the parent process
+- prefetch signature changed
+
+### Removed
+- dropped support for python 2.7 as it approaches near EOL
+- removed deprecated indexing, eager_iter, load_buffers
+- removed anticipate argument from evaluation
+
 ## [0.9.0] - 2018-09-10
 ### Added
 - improved documention
