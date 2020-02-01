@@ -511,21 +511,19 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None)
             * `'process'` uses :class:`python:multiprocessing.Process`
               which provides full parallelism but adds communication
               overhead between workers and the parent process.
-            * `'sharedmem'` also uses processes but with shared memory
-              between workers and the main process which features
-              zero-copy transfers.
-              This adds several limitations however:
+            * `'sharedmem'` also uses processes but avoids data transfers by
+              using shared memory between the workers and the parent process.
+              This method adds several limitations however:
 
-              - References to the returned items must be deleted to allow
-                recycling of the memory slots (for example the items can be
-                read as for loop variables and therefore erase at every
-                iteration).
+              - Once read, items must be deleted to recycle their memory
+                slot in shared memory (for instance by calling :ref:`del
+                <python:del>` explicitely or overwriting a for loop variable).
               - All items must be buffers of identical shape and type (ex:
                 :ref:`np.ndarray <numpy:arrays>`), tuples or dicts
                 of buffers are also supported.
-              - A fairly large value for `max_buffer` is recommended to avoid
-                draining all memory slots before the garbage collector releases
-                them.
+              - `max_buffer` should be large enough to avoid having to trigger
+                the garbage collector too often in order to release memory
+                slots.
         max_buffered (Optional[int]):
             limit on the number of prefetched values at any time (default 10).
         start_hook (Optional[Callable]):
