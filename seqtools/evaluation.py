@@ -1,28 +1,21 @@
-import functools
-import struct
-import pickle as pkl
-import gc
+import multiprocessing
 import os
+import pickle as pkl
+import platform
 import queue
 import signal
+import sys
 import threading
 import time
-from abc import ABC, abstractmethod
 import weakref
+from abc import ABC, abstractmethod
+from multiprocessing import sharedctypes
 
-try:
-    from torch import multiprocessing
-    from torch.multiprocessing import sharedctype
-except ImportError:
-    import multiprocessing
-    from multiprocessing import sharedctypes
 from tblib import pickling_support
 
-from .errors import format_stack, EvaluationError, seterr
-from .memory import packed_size, pack, unpack
-from .utils import get_logger
 from .C.refcountedbuffer import RefCountedBuffer
-
+from .errors import format_stack, EvaluationError, seterr
+from .utils import get_logger
 
 pickling_support.install()
 
@@ -39,112 +32,81 @@ class AsyncWorker(ABC):
         raise NotImplementedError
 
 
-class ProcessBackend(AsyncWorker):
-    """Process-based workers communicating values with pipes."""
-    def __init__(self, seq, num_workers=0, init_fn=None):
+def split_buffer(buffer, chunk_sizes):
+    start = []
+    stop = []
+    offset = 0
+    for s in chunk_sizes:
+        start.append(offset)
+        offset += s
+        stop.append(offset)
+
+    return [buffer[i1:i2] for i1, i2 in zip(start, stop)]
+
+
+class ProcessBacked(AsyncWorker):
+    """Process-based workers with shared memory for zero-copy transfer."""
+    def __init__(self, seq, num_workers=0, buffer_size=10, init_fn=None,
+                 shm_size=0):
         if num_workers <= 0:
             num_workers = multiprocessing.cpu_count() - num_workers
         if num_workers <= 0:
             raise ValueError("at least one worker required")
+        if buffer_size < num_workers:
+            raise ValueError("at least one buffer slot required by worker")
+        if shm_size > 0 and sys.version_info < (3, 8):
+            raise NotImplementedError("shm support requires python>=3.8")
+        if shm_size > 0 and platform.python_implementation() == "PyPy":
+            raise NotImplementedError("shm support broken on PyPy")
 
+        # allocate shared memory for zero-copy transfers from workers
+        self.shm = sharedctypes.RawArray('B', shm_size)
+        self.shm_slot_size = shm_size // buffer_size
+        # shm slot are identified by their byte offset
+        if shm_size > 0:
+            self.free_shm_slots = {i * self.shm_slot_size for i in range(buffer_size)}
+        else:
+            self.free_shm_slots = set()
+
+        # initialize workers
         self.job_queue = multiprocessing.Queue()
         self.result_pipes = []
 
         self.workers = []
         for _ in range(num_workers):
             rx, tx = multiprocessing.Pipe(duplex=False)
+
             worker = multiprocessing.Process(
                 target=self.__class__.worker,
-                args=(seq, self.job_queue, tx, init_fn),
+                args=(seq, self.job_queue, self.shm, self.shm_slot_size, tx, init_fn),
                 daemon=True)
-
             old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
             worker.start()
             signal.signal(signal.SIGINT, old_sig_hdl)
             tx.close()
+
             self.result_pipes.append(rx)
             self.workers.append(worker)
 
         # monitor workers
         self.worker_died = threading.Event()
-        worker_monitor = threading.Thread(target=ProcessBackend.monitor_workers,
+        worker_monitor = threading.Thread(target=self.monitor_workers,
                                           args=(self.workers, self.worker_died),
                                           daemon=True)
         worker_monitor.start()
 
         # set cleanup hooks
-        weakref.finalize(self, ProcessBackend.cleanup,
+        weakref.finalize(self, ProcessBacked.cleanup,
                          self.job_queue, self.workers, worker_monitor)
 
-    def submit_job(self, item):
-        self.job_queue.put(item)
-
-    def wait_completion(self):
-        while True:
-            p = multiprocessing.connection.wait(self.result_pipes, timeout=1)
-            if len(p) > 0:
-                try:
-                    return p[0].recv()
-                except EOFError:
-                    self.worker_died.set()
-
-            if self.worker_died.is_set():
-                raise RuntimeError("worker died unexpetedly")
-
     @staticmethod
-    def worker(seq, job_queue, result_pipe, init_fn):
-        logger = get_logger(__name__)
-        ppid = os.getppid()
-        logger.debug("worker started")
-
-        if init_fn is not None:
-            init_fn()
-
-        seterr('passthrough')
-
-        while True:
-            # acquire job
-            while True:
-                try:
-                    idx = job_queue.get(timeout=1)
-                    break
-                except queue.Empty:
-                    if os.getppid() != ppid:  # parent died
-                        logger.debug("worker stopping because parent crashed")
-                        return
-
-            if idx < 0:  # stop on sentinel value
-                logger.debug("worker stopping")
-                return
-
-            # collect value (or error trying)
-            try:
-                value = seq[idx]
-            except Exception as e:
-                value = e
-                success = False
-            else:
-                success = True
-
-            # send it
-            try:
-                result_pipe.send((idx, success, value))
-
-            except Exception as e:
-                if success:  # can't send it, this becomes an error case
-                    msg = ("failed to send item {} to parent process, ".format(idx)
-                           + "is it picklable? Error message was:\n{}".format(e))
-                    value = ValueError(msg)
-                    success = False
-
-                else:  # can't send the error, fallback to a simplified feedback
-                    value = str(e)
-
-                try:
-                    result_pipe.send((idx, success, value))
-                except BrokenPipeError:  # parent died unexpectedly
-                    logger.debug("worker stopping because pipe closed")
-                    return
+    def cleanup(job_queue, workers, monitor):
+        for _ in workers:
+            job_queue.put((-1, -1))
+        for w in workers:
+            if w.is_alive():
+                w.join()
+        monitor.join()
 
     @staticmethod
     def monitor_workers(workers, worker_died):
@@ -156,133 +118,46 @@ class ProcessBackend(AsyncWorker):
 
             time.sleep(1)
 
-    @staticmethod
-    def cleanup(job_queue, workers, monitor):
-        for _ in workers:
-            job_queue.put(-1)
-        for w in workers:
-            if w.is_alive():
-                w.join()
-        monitor.join()
-
-
-class BufferRecycler:
-    def __init__(self, buffers):
-        self.buffers = buffers
-        self.buffer_queue = queue.Queue(maxsize=len(buffers))
-        for i, buf in enumerate(buffers):
-            cb = functools.partial(
-                BufferRecycler.recycle,
-                buffer_idx=i,
-                buffer_queue=self.buffer_queue)
-            rcbuf = RefCountedBuffer(buf, cb)
-            self.buffer_queue.put((i, rcbuf))
-
-    def fetch(self):
-        try:
-            i, buf = self.buffer_queue.get_nowait()
-        except queue.Empty:
-            pass
-        else:
-            return i, memoryview(buf)
-
-        gc.collect()
-        try:
-            i, buf = self.buffer_queue.get_nowait()
-        except queue.Empty:
-            raise MemoryError("none of the buffers has been release yet.") from None
-        else:
-            return i, memoryview(buf)
-
-    @staticmethod
-    def recycle(buffer, buffer_idx, buffer_queue):
-        buffer_queue.put_nowait((buffer_idx, buffer))
-
-
-class SHMProcessBacked(AsyncWorker):
-    """Process-based workers communicating values via shared memory."""
-    def __init__(self, seq, num_workers=0, buffer_size=20, init_fn=None):
-        if num_workers <= 0:
-            num_workers = multiprocessing.cpu_count() - num_workers
-        if num_workers <= 0:
-            raise ValueError("at least one worker required")
-        if buffer_size < num_workers:
-            raise ValueError("at least one buffer slot required by worker")
-
-        self.sample = seq[0]
-        sample_size = packed_size(self.sample)
-
-        self.job_queue = multiprocessing.Queue()
-        self.result_pipes = []
-        shm = memoryview(sharedctypes.RawArray('b', sample_size * buffer_size))
-        buffers = [shm[i * sample_size:(i + 1) * sample_size]
-                   for i in range(buffer_size)]
-        self.buffer_recycler = BufferRecycler(buffers)
-        self.result_buffers = {}
-
-        self.workers = []
-        for _ in range(num_workers):
-            rx, tx = multiprocessing.Pipe(duplex=False)
-
-            worker = multiprocessing.Process(
-                target=self.__class__.worker,
-                args=(seq, self.job_queue, buffers, tx, init_fn),
-                daemon=True)
-            old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            worker.start()
-            signal.signal(signal.SIGINT, old_sig_hdl)
-            tx.close()
-
-            self.result_pipes.append(rx)
-            self.workers.append(worker)
-
-        # monitor workers
-        self.worker_died = threading.Event()
-        worker_monitor = threading.Thread(target=ProcessBackend.monitor_workers,
-                                          args=(self.workers, self.worker_died),
-                                          daemon=True)
-        worker_monitor.start()
-
-        # set cleanup hooks
-        weakref.finalize(self, SHMProcessBacked.cleanup,
-                         self.job_queue, self.workers, worker_monitor)
-
     def submit_job(self, item):
         try:
-            slot, self.result_buffers[item] = self.buffer_recycler.fetch()
-        except MemoryError as e:
-            if any(not w.is_alive() for w in self.workers):
-                raise RuntimeError("worker died unexpetedly")
-            raise e
-        else:
-            self.job_queue.put((item, slot))
+            shm_slot_start = self.free_shm_slots.pop()
+        except KeyError:
+            shm_slot_start = None
+
+        self.job_queue.put((item, shm_slot_start))
 
     def wait_completion(self):
         while True:
             p = multiprocessing.connection.wait(self.result_pipes, timeout=1)
             if len(p) > 0:
-                try:
-                    idx, success, error = struct.unpack('L?L', p[0].recv_bytes(24))
-                    if not success:
-                        error = pkl.loads(p[0].recv_bytes(error))
-                except EOFError:
-                    self.worker_died.set()
-                    raise RuntimeError("worker died unexpectedly")
-                else:
-                    break
-
+                break
             elif self.worker_died.is_set():
-                raise RuntimeError("worker died unexpetedly")
+                raise RuntimeError("a worker died unexpectedly")
 
-        if success:
-            value, _ = unpack(self.sample, self.result_buffers.pop(idx))
-            return idx, success, value
+        try:
+            item, success, buffer_regions, payload = p[0].recv()
+
+        except EOFError:
+            self.worker_died.set()
+            raise RuntimeError("a worker died unexpectedly")
+
+        if len(buffer_regions) > 0:  # shm was used to send payload
+            # add refcount to shm to retrieve slot once free
+            shm_slot_start = buffer_regions[0][0]
+            rc_shm = memoryview(RefCountedBuffer(
+                self.shm, lambda _: self.free_shm_slots.add(shm_slot_start)))
+            # delimit off-band pickle buffers
+            buffers = [rc_shm[start:stop] for start, stop in buffer_regions]
+            # deserialize payload
+            value = pkl.loads(payload, buffers=buffers)
+
         else:
-            self.result_buffers.pop(idx)
-            return idx, success, error
+            value = pkl.loads(payload)
+
+        return item, success, value
 
     @staticmethod
-    def worker(seq, job_queue, buffers, result_pipe, init_fn):
+    def worker(seq, job_queue, shm, shm_slot_size, result_pipe, init_fn):
         ppid = os.getppid()
         logger = get_logger(__name__)
         logger.debug("worker started")
@@ -292,62 +167,80 @@ class SHMProcessBacked(AsyncWorker):
 
         seterr('passthrough')
 
+        shm = memoryview(shm).cast('B')
+        buffers_limits = []
+        shm_slot_start = -1
+        shm_slot_stop = -1
+
+        def buffer_callback(buffer):
+            nonlocal shm_slot_start
+
+            data = buffer.raw()
+
+            if shm_slot_start + data.nbytes > shm_slot_stop:
+                return True
+
+            shm[shm_slot_start:shm_slot_start + data.nbytes] = data
+            buffers_limits.append((shm_slot_start, shm_slot_start + data.nbytes))
+            shm_slot_start += data.nbytes
+
+            return False
+
         while True:
             # acquire job
             while True:
                 try:
-                    idx, buffer_idx = job_queue.get(timeout=1)
-                    break
+                    idx, shm_slot_start = job_queue.get(timeout=1)
                 except queue.Empty:
                     if os.getppid() != ppid:  # parent died
                         logger.debug("worker stopping because parent crashed")
                         return
+                else:
+                    break
 
             if idx < 0:  # stop on sentinel value
                 return
 
             # collect value (or error trying)
             try:
-                payload = seq[idx]
+                value = seq[idx]
             except Exception as e:
-                payload = e
+                value = e
                 success = False
             else:
                 success = True
 
-            # send it
-            if success:
-                try:
-                    pack(payload, buffers[buffer_idx])
-                    result_pipe.send_bytes(struct.pack('L?L', idx, success, 0))
-                except Exception as e:
-                    msg = ("failed to send item {} to parent process, ".format(idx)
-                           + "is it packable? Error message was:\n{}".format(e))
-                    payload = ValueError(msg)
+            # serialize it
+            try:
+                if shm_slot_start is None:
+                    payload = pkl.dumps(value, protocol=-1)
+                else:
+                    buffers_limits.clear()
+                    shm_slot_stop = shm_slot_start + shm_slot_size
+                    payload = pkl.dumps(value, protocol=-1,
+                                        buffer_callback=buffer_callback)
+
+            except Exception as e:  # gracefully recover failed serialization
+                if success:
                     success = False
+                    msg = ("failed to send item {} to parent process, ".format(idx)
+                           + "is it picklable? Error message was:\n{}".format(e))
+                    payload = pkl.dumps(ValueError(msg))
+                else:  # serialize error message because error can't be pickled
+                    payload = pkl.dumps(str(value))
 
-            if not success:
-                try:
-                    payload = pkl.dumps(payload)
-                except Exception:  # fallback to a simplified feedback
-                    payload = pkl.dumps(str(payload))
+            # send it
+            try:
+                result_pipe.send((idx, success, buffers_limits, payload))
 
-                try:
-                    result_pipe.send_bytes(struct.pack('L?L', idx, success, len(payload)))
-                    result_pipe.send_bytes(payload)
-                except BrokenPipeError:  # unrecoverable error
-                    # parent died unexpectedly
-                    logger.debug("worker stopping because pipe closed")
-                    return
+            except BrokenPipeError:  # unrecoverable error
+                # parent died unexpectedly
+                logger.debug("worker stopping because pipe closed")
+                return
 
-    @staticmethod
-    def cleanup(job_queue, workers, monitor):
-        for _ in workers:
-            job_queue.put((-1, -1))
-        for w in workers:
-            if w.is_alive():
-                w.join()
-        monitor.join()
+            except Exception as e:
+                logger.debug("worker stopping due to unexpected error")
+                raise e
 
 
 class ThreadBackend(AsyncWorker):
@@ -483,7 +376,8 @@ class Prefetch:
             reraise_err(item, value, self.creation_stack)
 
 
-def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None):
+def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
+             shm_size=0):
     """Wrap a sequence to prefetch values ahead using background workers.
 
     Every time an element of this container is accessed, the following
@@ -511,39 +405,37 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None)
             * `'process'` uses :class:`python:multiprocessing.Process`
               which provides full parallelism but adds communication
               overhead between workers and the parent process.
-            * `'sharedmem'` also uses processes but avoids data transfers by
-              using shared memory between the workers and the parent process.
-              This method adds several limitations however:
-
-              - Once read, items must be deleted to recycle their memory
-                slot in shared memory (for instance by calling :ref:`del
-                <python:del>` explicitely or overwriting a for loop variable).
-              - All items must be buffers of identical shape and type (ex:
-                :ref:`np.ndarray <numpy:arrays>`), tuples or dicts
-                of buffers are also supported.
-              - `max_buffer` should be large enough to avoid having to trigger
-                the garbage collector too often in order to release memory
-                slots.
         max_buffered (Optional[int]):
             limit on the number of prefetched values at any time (default 10).
         start_hook (Optional[Callable]):
             Optional callback run by workers on start.
+        shm_size (int):
+            Size of shared memory (in bytes) to accelerate transfer of buffer
+            objects (ex: np.ndarray) when *method='process'*.
+            Set this to a large enough value to fit the buffers from
+            `max_buffered` items. Make sure to delete or copy the returned
+            items otherwise the shared memory will be depleted quickly.
+            **Requires python >= 3.8**.
 
     Returns:
         Sequence: The wrapped sequence.
     """
+    if max_buffered <= 0:
+        raise ValueError('max_buffered must be greater than 0')
+
     if nworkers == 0:
         return seq
     elif method == "thread":
         backend = ThreadBackend(
             seq, num_workers=nworkers, init_fn=start_hook)
     elif method == "process":
-        backend = ProcessBackend(
-            seq, num_workers=nworkers, init_fn=start_hook)
-    elif method == "sharedmem":
-        backend = SHMProcessBacked(
-            seq, num_workers=nworkers, buffer_size=max_buffered, init_fn=start_hook)
-        max_buffered = max_buffered // 2  # limit strain on GC to recycle buffer slots
+        if max_buffered < 4:
+            raise ValueError("process backend requires at least 4 buffer slots")
+        backend = ProcessBacked(
+            seq, num_workers=nworkers, buffer_size=max_buffered, init_fn=start_hook,
+            shm_size=shm_size)
+        # limit strain on GC to recycle buffer slots by limiting queued items
+        max_buffered = max_buffered - 3
     else:
         raise ValueError("invalid prefetching method")
 

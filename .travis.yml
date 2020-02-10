@@ -2,10 +2,6 @@ language: python
 cache: pip
 matrix:
   include:
-    - python: 3.5
-      env:
-        - TOXENV=py35
-        - CIBW_BUILD=cp35-*
     - python: 3.6
       env:
         - TOXENV=py36
@@ -14,13 +10,13 @@ matrix:
       env:
         - TOXENV=py37
         - CIBW_BUILD=cp37-*
-    - python: 3.8
+    - python: 3.9
       env:
         - TOXENV=py38,doctest
-        - CIBW_BUILD=cp38-*
+        - CIBW_BUILD=cp39-*
 
 install:
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.8' ]]; then sudo apt-get install -y pandoc; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.9' ]]; then sudo apt-get install -y pandoc; fi
   - pip install tox coverage codecov cibuildwheel twine
 
 script:

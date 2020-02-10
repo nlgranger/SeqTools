@@ -2,12 +2,9 @@ import logging
 import random
 from time import time, sleep
 
-import numpy as np
 import pytest
 
 from seqtools import add_cache, smap
-from seqtools.memory import packed_size, pack, unpack
-
 
 logging.basicConfig(level=logging.DEBUG)
 seed = int(random.random() * 100000)
@@ -69,37 +66,3 @@ def test_cached_timing():  # pragma: no cover
     print("test_cached_timing {:.2f}s".format(duration))
 
     assert duration < 1.2
-
-
-def test_packing():
-    sample_items = [
-        np.random.rand(10, 20),
-        (np.random.rand(22, 33, 44), (np.arange(10), np.arange(10))),
-        {"a": np.random.rand(25), "b": np.random.rand(25)}
-    ]
-
-    # test packed_size
-    assert tuple([packed_size(i) for i in sample_items]) == (1600, 255712, 400)
-
-    def check_equal(a, b):
-        if isinstance(b, np.ndarray):
-            np.testing.assert_allclose(a, b)
-        elif isinstance(b, dict):
-            assert set(a.keys()) == set(b.keys())
-            # insertion order matters
-            for (_, va), (_, vb) in zip(sorted(a.items()), sorted(b.items())):
-                check_equal(va, vb)
-        elif isinstance(b, tuple):
-            assert len(a) == len(b)
-            for va, vb in zip(a, b):
-                check_equal(va, vb)
-
-    # test (un)packing
-    sample_items[-1] = dict(sorted(sample_items[-1].items())[::-1])
-    for sample in sample_items:
-        size = packed_size(sample)
-        buffer = np.empty(size, dtype='b')
-        pack(sample, buffer)
-        rebuild, _ = unpack(sample, buffer)
-
-        check_equal(rebuild, sample)

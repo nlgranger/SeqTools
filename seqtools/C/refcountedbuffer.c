@@ -122,7 +122,7 @@ RefCountedBuffer_releasebuffer(PyObject* obj, Py_buffer *view)
 
     // Trigger callback if needed
     self->refcount--;
-    if (self->refcount == 0 && self->cb != Py_None) {
+    if (self->refcount == 0 && self->cb != NULL && self->cb != Py_None) {
         PyObject *arglist;
         PyObject *result;
 
@@ -189,8 +189,8 @@ static PyBufferProcs RefCountedBuffer_as_buffer = {
 
 
 static PyMemberDef RefCountedBuffer_members[] = {
-    {"cb", T_OBJECT_EX, offsetof(RefCountedBufferObject, cb), 0,
-     "refcount 0 callback"},
+    {"cb", T_OBJECT_EX, offsetof(RefCountedBufferObject, cb), 0, "refcount 0 callback"},
+    {"rc", T_INT, offsetof(RefCountedBufferObject, refcount), READONLY, "ref count"},
     {NULL}
 };
 
