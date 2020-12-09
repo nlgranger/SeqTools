@@ -18,7 +18,10 @@ from .C.refcountedbuffer import RefCountedBuffer
 from .errors import format_stack, EvaluationError, seterr
 from .utils import get_logger
 
+
 pickling_support.install()
+
+logger = get_logger(__name__)
 
 
 # Asynchronous item fetching backends -----------------------------------------
@@ -123,6 +126,8 @@ class ProcessBacked(AsyncWorker):
         try:
             shm_slot_start = self.free_shm_slots.pop()
         except KeyError:
+            logger.warning("no free shm slots available, "
+                           "make sure prefetch results are deleted")
             shm_slot_start = None
 
         self.job_queue.put((item, shm_slot_start))
@@ -136,7 +141,7 @@ class ProcessBacked(AsyncWorker):
                 raise RuntimeError("a worker died unexpectedly")
 
         try:
-            item, success, buffer_regions, payload = p[0].recv()
+            item, success, shm_slot_start, buffer_regions, payload = p[0].recv()
 
         except EOFError:
             self.worker_died.set()
@@ -144,14 +149,15 @@ class ProcessBacked(AsyncWorker):
 
         if len(buffer_regions) > 0:  # shm was used to send payload
             # add refcount to shm to retrieve slot once free
-            shm_slot_start = buffer_regions[0][0]
             rc_shm = memoryview(RefCountedBuffer(
                 self.shm, lambda _: self.free_shm_slots.add(shm_slot_start)))
             # delimit off-band pickle buffers
             buffers = [rc_shm[start:stop] for start, stop in buffer_regions]
             # deserialize payload
             value = pkl.loads(payload, buffers=buffers)
-
+        elif shm_slot_start is not None:  # buffer hasn't been used
+            self.free_shm_slots.add(shm_slot_start)
+            value = pkl.loads(payload)
         else:
             value = pkl.loads(payload)
 
@@ -160,7 +166,6 @@ class ProcessBacked(AsyncWorker):
     @staticmethod
     def worker(seq, job_queue, shm, shm_slot_size, result_pipe, init_fn):
         ppid = os.getppid()
-        logger = get_logger(__name__)
         logger.debug("worker started")
 
         if init_fn is not None:
@@ -170,20 +175,21 @@ class ProcessBacked(AsyncWorker):
 
         shm = memoryview(shm).cast('B')
         buffers_limits = []
-        shm_slot_start = -1
+        shm_offset = -1
         shm_slot_stop = -1
 
         def buffer_callback(buffer):
-            nonlocal shm_slot_start
+            nonlocal shm_offset
 
             data = buffer.raw()
 
-            if shm_slot_start + data.nbytes > shm_slot_stop:
+            if shm_offset + data.nbytes > shm_slot_stop:
+                logger.warning('shared memory is too small to store buffers')
                 return True
 
-            shm[shm_slot_start:shm_slot_start + data.nbytes] = data
-            buffers_limits.append((shm_slot_start, shm_slot_start + data.nbytes))
-            shm_slot_start += data.nbytes
+            shm[shm_offset:shm_offset + data.nbytes] = data
+            buffers_limits.append((shm_offset, shm_offset + data.nbytes))
+            shm_offset += data.nbytes
 
             return False
 
@@ -217,6 +223,7 @@ class ProcessBacked(AsyncWorker):
                     payload = pkl.dumps(value, protocol=-1)
                 else:
                     buffers_limits.clear()
+                    shm_offset = shm_slot_start
                     shm_slot_stop = shm_slot_start + shm_slot_size
                     payload = pkl.dumps(value, protocol=-1,
                                         buffer_callback=buffer_callback)
@@ -232,7 +239,7 @@ class ProcessBacked(AsyncWorker):
 
             # send it
             try:
-                result_pipe.send((idx, success, buffers_limits, payload))
+                result_pipe.send((idx, success, shm_slot_start, buffers_limits, payload))
 
             except BrokenPipeError:  # unrecoverable error
                 # parent died unexpectedly
