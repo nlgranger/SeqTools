@@ -38,12 +38,18 @@ def basic_getitem(func):
             return SeqSlice(self, key)
 
         elif isint(key):
-            if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
-
             if key < 0:
+                if key < -len(self):
+                    raise IndexError(self.__class__.__name__ + " index out of range")
                 key = len(self) + key
+
+            try:
+                size = len(self)
+            except TypeError:  # object has not len
+                pass
+            else:
+                if key >= size:
+                    raise IndexError(self.__class__.__name__ + " index out of range")
 
             return func(self, key)
 

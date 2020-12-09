@@ -9,11 +9,14 @@ from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
 
 class Collation(object):
     def __init__(self, sequences):
+        try:
+            lengths = [len(s) for s in sequences]
+        except TypeError:  # sequence has no len
+            pass
+        else:
+            if any(l != lengths[0] for l in lengths):
+                raise ValueError("sequences len() don't match")
         self.sequences = sequences
-
-        if not all([len(seq) == len(self.sequences[0])
-                    for seq in self.sequences]):
-            raise ValueError("all sequences should have the same length")
 
     def __len__(self):
         return len(self.sequences[0])
@@ -126,15 +129,21 @@ class BatchView(object):
         return len(self.sequence) // self.batch_size + (1 if extra else 0)
 
     def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
+        try:
+            size = len(self)
+        except TypeError:  # sequence has no len
+            for i in itertools.count():
+                yield self[i]
+        else:
+            for i in range(size):
+                yield self[i]
 
     @basic_getitem
     def __getitem__(self, key):
         result = self.sequence[
             key * self.batch_size:(key + 1) * self.batch_size]
 
-        if key == (len(self) - 1) and self.pad is not None:
+        if self.pad is not None and key == (len(self) - 1):
             pad_size = self.batch_size - len(self.sequence) % self.batch_size
             result = concatenate((result, [self.pad] * pad_size))
 

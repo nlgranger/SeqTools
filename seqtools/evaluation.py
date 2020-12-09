@@ -10,6 +10,7 @@ import time
 import weakref
 from abc import ABC, abstractmethod
 from multiprocessing import sharedctypes
+import itertools
 
 from tblib import pickling_support
 
@@ -341,10 +342,13 @@ class Prefetch:
             self.jobs.append(i)
 
     def __len__(self):
-        return self.size
+        if self.size is None:
+            raise TypeError("object of type 'seqtools.Prefetch' has no len()")
+        else:
+            return self.size
 
     def __iter__(self):
-        for i in range(len(self)):
+        for i in range(self.size) if self.size else itertools.count():
             yield self[i]
 
     def __getitem__(self, item):
@@ -413,8 +417,8 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
             Size of shared memory (in bytes) to accelerate transfer of buffer
             objects (ex: np.ndarray) when *method='process'*.
             Set this to a large enough value to fit the buffers from
-            `max_buffered` items. Make sure to delete or copy the returned
-            items otherwise the shared memory will be depleted quickly.
+            *max_buffered* items. Make sure to delete or copy the returned
+            items otherwise allocated shared memory will be depleted quickly.
             **Requires python >= 3.8**.
 
     Returns:
@@ -435,7 +439,7 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
             seq, num_workers=nworkers, buffer_size=max_buffered, init_fn=start_hook,
             shm_size=shm_size)
         # limit strain on GC to recycle buffer slots by limiting queued items
-        max_buffered = max_buffered - 3
+        max_buffered = max_buffered - 2
     else:
         raise ValueError("invalid prefetching method")
 

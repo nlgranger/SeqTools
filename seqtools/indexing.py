@@ -447,8 +447,11 @@ def switch(condition, x, y):
 
 class Case(object):
     def __init__(self, selector, *values):
-        if any(len(v) != len(selector) for v in values):
-            raise ValueError("all inputs must have the same size")
+        try:
+            if any(len(v) != len(selector) for v in values):
+                raise ValueError("all inputs must have the same size")
+        except TypeError:  # object has no len()
+            pass
 
         self.selector = selector
         self.values = values
