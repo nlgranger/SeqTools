@@ -1,15 +1,13 @@
 import os
+import pickle as pkl
+import shutil
 import sys
 import tempfile
-import shutil
-import pickle as pkl
-import types
 import time
+import types
+from importlib import reload
 
 from seqtools import SerializableFunc
-
-if sys.version_info >= (3, 4):
-    from importlib import reload
 
 
 def test_SerializableFunc():

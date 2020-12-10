@@ -9,10 +9,7 @@ import shutil
 import sys
 import tempfile
 
-if sys.version_info >= (3, 4):
-    from importlib import import_module, reload
-else:
-    from importlib import import_module
+from importlib import import_module, reload
 
 
 class SerializableFunc(object):

@@ -1,9 +1,9 @@
 # Sanity checks before making a release
 
 import os
-import sys
-import pkg_resources
 import subprocess
+
+import pkg_resources
 import pytest
 
 
@@ -21,10 +21,6 @@ def check_output(cmd):
 
 
 def candidate_for_release():
-    # Check whether this is going to be a release
-    if sys.version_info[:2] != (3, 6):
-        return False
-
     if check_output("git rev-parse --abbrev-ref HEAD") != "master":
         return False
 
