@@ -1,8 +1,8 @@
 .. image:: https://badge.fury.io/py/SeqTools.svg
    :target: https://github.com/nlgranger/SeqTools
    :alt: PyPi package
-.. image:: https://travis-ci.org/nlgranger/SeqTools.svg?branch=master
-   :target: https://travis-ci.org/nlgranger/SeqTools
+.. image:: https://api.travis-ci.com/nlgranger/SeqTools.svg?branch=master
+   :target: https://travis-ci.com/nlgranger/SeqTools
    :alt: Continuous integration
 .. image:: https://readthedocs.org/projects/seqtools-doc/badge
    :target: http://seqtools-doc.readthedocs.io

@@ -1,44 +1,60 @@
 language: python
-cache: pip
+services:
+  - docker
+python:
+  - 3.6
+  - 3.7
+  - 3.8
+  - 3.9
 jobs:
   include:
-    - python: 3.6
-      env:
-        - TOXENV=py36
-        - CIBW_BUILD=cp36-*
-    - python: 3.7
-      env:
-        - TOXENV=py37
-        - CIBW_BUILD=cp37-*
-    - python: 3.9
-      env:
-        - TOXENV=py39,doctest
-        - CIBW_BUILD=cp39-*
-
-install:
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.9' ]]; then sudo apt-get install -y pandoc; fi
-  - pip install tox coverage codecov cibuildwheel twine
-
-script:
-  - tox
-
-after_success:
-  - tox -e coverage
-  - coverage report xml
-  - codecov
-
-before_deploy:
-  - cibuildwheel --output-dir wheelhouse
-
-deploy:
-  - provider: script
-    skip_cleanup: true
-    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_PASSWORD twine upload --skip-existing wheelhouse/*.whl
-    on:
-      tags: true
-  - provider: script
-    skip_cleanup: true
-    script: env TWINE_USERNAME=__token__ TWINE_PASSWORD=$TESTPYPI_PASSWORD twine upload --skip-existing --repository-url https://test.pypi.org/legacy/ wheelhouse/*.whl
-    on:
-      tags: true
-      all_branches: true
+    - name: "Unit tests"
+      stage: test
+      if: env(TRAVIS_PYTHON_VERSION) = 3.6 OR env(TRAVIS_PYTHON_VERSION) = 3.9
+      install:
+        - pip install tox coverage
+      script:
+        - tox -e $(echo py$TRAVIS_PYTHON_VERSION | tr -d .)
+    - name: "Documentation tests"
+      stage: test
+      python: 3.9
+      install:
+        - sudo apt-get install -y pandoc
+        - pip install tox coverage
+      script:
+        - tox -e doctest
+    - name: "Upload coverage"
+      stage: deploy
+      install:
+        - pip install tox coverage
+      script:
+        - tox -e coverage
+        - coverage report xml
+        - codecov
+    - name: "Upload to Pypi"
+      stage: deploy
+      python: 3.9
+      if: tag IS present
+      install: skip
+      script: skip
+      before_deploy:
+        - pip install cibuildwheel
+        - env CIBW_BUILD="cp36-* cp37-* cp38-* cp39-*" python -m cibuildwheel --output-dir wheelhouse
+      deploy:
+        - provider: pypi
+          username: __token__
+          distributions: sdist bdist_wheel
+          on:
+            branch: master
+          password:
+            secure: iMF0d1e1wNvRYH0pfDQzzylEeSJ7OaNuefQ51iUTqFeB2urGyadlGk9d0mA+Dne2MPaZDIEgVKoitbqWsnDG8SUvGzQrplv+gF4DBN7IG749/XCq0l0I0L0+CT142wIMfHiDMoZc2zu2uiLwK17Wqi4QOtN80Mnh3QJdcnQArMFWmkLxnZRKuZ/Mj13id18sMarVnuSyoernI59AfO9G3Aset1hv/FyF6Pv2As+s5jlCQZlLXsVw3VztH1sf5C7dlMFnz6zm54Xd9wFrDyxrTBbb2YBkTwkHJNNpTEmsPiz+CJcOO8YvlsY2sXZlMnG/tHbxGgwLQFnSq/1QzPYKM4eqmSuHpcgnlZNN6Hx5CbK9fweRgabZ2Pzuz7FVzDWa9QjgD2GY8nD15jD2ky5KLqsJTtirSZpl41bL5Cjw0zpxi1JlW/kXor8OOuN6j/NE/SOdNNBn5hATy+K0uuj4qaxZbfQK3+Yir9SrARx/Npd2bh2MRHKcIQVWb80D5YFEDwbbctWNEgLgU1BUrVEqUbJ6IHV62+bqaS2LvlYPubGa1p8zsF7I5Pbg1W5EW5yVGeTGlVH8G/x3yU4sH4xGjzcuG0Xn3w4VpXpVVr+CQKj//ZH2Wr9bDOAiVeGhpZdTZL4OkOHaWUq9/BPbJjQlhCOUr1BwSJRJWxfbuEVZw04=
+          edge: true
+        - provider: pypi
+          server: https://testpypi.python.org/pypi
+          username: __token__
+          distributions: sdist bdist_wheel
+          on:
+            all_branches: true
+          password:
+            secure: buwowE+Nff2hnxlwI53qSbgaP+1GwUVK3atMhc7+0hhgi2rSSgYxhZ5ZE1bqrJP3pKly0hNZw7S09jK9zxKAFH8echvghTBMa5un3SG4qSNZ3ZN08YTOqeCSreL42v+ZxH+Y3tL1W2iltLPgjBb7XkIKHxnPNggcE3lLSzuMDVkwXmGUZCqJSp+6NqhY35GKsc7DzUF9G19rO4sF/WTN3MsQJSJUZiyBghk498mk1TADT/88crWmVu/rW+nDO/Piu8RVKmZPVj2KxiyEGiM1TRO4TAuIH6zDd06XGtmGRFdB5VStKtGzl4odRbadimjnvLFzvG4e3Z7p+tAfmD6BQAWV0+eRqUTbGvxVi31YibBptmAt5TeA1Z55stkNreChAjERr8+mSEjT40qDnj4+8ypSsCcz6qPPDQU7z7MpychGAP+k7Gsxdz1yOBo72r0NV9VjMvmvnN2DqjZfS4iymICeBKcnEd+TwElct5EiUggN0Wau8EX53/euN8O0rFHN1qGO6iuklImoq+V1nRkuN/iXLtGu1eU6WJNWAs8GUPq/mQRv1JsPHuHhPU/HGV6Jdu9kdFStUwsGgVqQeKLQ7UfG47KL4d27OEmKoSCzcQC6hP5Asrt8whvjAOaTjHxeZMioN2v/Z3yLIacGj5sVzjdkE7XxEcEbEO9g0dFuvKc=
+          edge: true
