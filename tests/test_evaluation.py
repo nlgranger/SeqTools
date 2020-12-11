@@ -114,7 +114,7 @@ def test_prefetch_timings(prefetch_kwargs):
     # multiple restarts
     arr = np.random.rand(100, 10)
     y = smap(f1, arr)
-    y = prefetch(y, nworkers=-1, max_buffered=10, **prefetch_kwargs)
+    y = prefetch(y, nworkers=4, max_buffered=10, **prefetch_kwargs)
     for _ in range(10):
         n = np.random.randint(0, 99)
         for i in range(n):

@@ -1,0 +1,80 @@
+version: 2.1
+
+jobs:
+  tests:
+    parameters:
+      python_version:
+        type: string
+    docker:
+      - image: cimg/python:<< parameters.python_version >>
+    steps:
+      - checkout
+      - run:
+          name: Unit tests
+          command: |
+            pip install tox
+            tox -e $( echo py<< parameters.python_version >> | tr -d '.' )
+      - when:
+          condition:
+            equal: [ << parameters.python_version >>, "3.9" ]
+          steps:
+            - run:
+                name: Doctests
+                command: |
+                  sudo apt update
+                  env DEBIAN_FRONTEND=noninteractive sudo apt install -y pandoc
+                  tox -e doctest
+      - run:
+          name: Upload coverage
+          command: |
+            tox -e coverage
+            bash <(curl -s https://codecov.io/bash)
+  deploy:
+    parameters:
+      twine_repository:
+        type: string
+      twine_password:
+        type: string
+    docker:
+      - image: quay.io/pypa/manylinux2014_x86_64
+    steps:
+      - checkout
+      - run:
+          name: Build
+          command: |
+            /opt/python/cp39-cp39/bin/python setup.py sdist
+            for d in $(find /opt/python ! -name "*35*" ! -path /opt/python); do
+                $d/bin/python setup.py bdist_wheel
+            done
+            for f in dist/*.whl; do auditwheel repair $f; done
+      - run:
+          name: Upload
+          command: |
+            /opt/python/cp39-cp39/bin/python -m pip install --user --upgrade twine
+            /opt/python/cp39-cp39/bin/python -m twine upload -r << parameters.twine_repository >> -u __token__ -p << parameters.twine_password >> wheelhouse/*
+
+workflows:
+  test-deploy:
+    jobs:
+      - tests:
+          matrix:
+            parameters:
+              python_version: [ "3.6", "3.9" ]
+      - deploy:
+          requires:
+            - tests
+          filters:
+            branches:
+              only: master
+            tags:
+              only: v*
+          twine_repository: pypi
+          twine_password: $PYPI_TOKEN
+      - deploy:
+          requires:
+            - tests
+          filters:
+            tags:
+              only: v*
+          twine_repository: testpypi
+          twine_password: $TESTPYPI_TOKEN

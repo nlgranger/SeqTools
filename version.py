@@ -4,7 +4,7 @@ import re
 
 
 # This line is updated automatically
-version = "1.0.0"
+version = "1.0.0-r18-geb95003"
 
 # If we are in the repo, the following script will update the version
 # number and update this file, otherwise, we are probably in the source
@@ -23,13 +23,13 @@ except subprocess.CalledProcessError:
 
 else:
     parts = description.split("-")
-    parts[0] = parts[0][1:]  # remove 'v' prefix
+    parts[0] = parts[0].lstrip('v')  # remove 'v' prefix
 
     if len(parts) == 1:  # tagged release
         version = parts[0]
     elif len(parts) == 3:  # tag + a few commits
         tag, revision, commit = parts
-        version = "{}-r{}-{}".format(tag, revision, commit)
+        version = "{}.dev{}".format(tag, revision)
     else:
         raise RuntimeError("Invalid version format")
 

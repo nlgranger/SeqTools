@@ -36,18 +36,6 @@ class AsyncWorker(ABC):
         raise NotImplementedError
 
 
-def split_buffer(buffer, chunk_sizes):
-    start = []
-    stop = []
-    offset = 0
-    for s in chunk_sizes:
-        start.append(offset)
-        offset += s
-        stop.append(offset)
-
-    return [buffer[i1:i2] for i1, i2 in zip(start, stop)]
-
-
 class ProcessBacked(AsyncWorker):
     """Process-based workers with shared memory for zero-copy transfer."""
     def __init__(self, seq, num_workers=0, buffer_size=10, init_fn=None,
