@@ -4,7 +4,7 @@ import re
 
 
 # This line is updated automatically
-version = "1.0.0-r18-geb95003"
+version = "1.1.0"
 
 # If we are in the repo, the following script will update the version
 # number and update this file, otherwise, we are probably in the source
@@ -12,7 +12,7 @@ version = "1.0.0-r18-geb95003"
 thisdir = os.path.dirname(__file__)
 try:
     description = subprocess.check_output(
-        "git describe --tags ".split(),
+        "git describe --tags".split(),
         stderr=subprocess.STDOUT,
         cwd=os.path.dirname(__file__),
         universal_newlines=True)

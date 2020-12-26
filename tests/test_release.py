@@ -38,6 +38,6 @@ if not candidate_for_release():
 def test_version():
     version = pkg_resources.require("seqtools")[0].version
 
-    tag = check_output("git describe --exact-match --tags")
+    tag = check_output("git describe --exact-match --tags").lstrip('v')
 
     assert tag == version, "Package version and commit tag do not match"

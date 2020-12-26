@@ -27,7 +27,7 @@ jobs:
       - run:
           name: Upload coverage
           command: |
-            tox -e coverage
+            tox -e coverage -- xml
             bash <(curl -s https://codecov.io/bash)
   deploy:
     parameters:
@@ -64,10 +64,8 @@ workflows:
           requires:
             - tests
           filters:
-            branches:
-              only: master
             tags:
-              only: v*
+              only: /^v[0-9]+\.[0-9]+\.[0-9]+$/
           twine_repository: pypi
           twine_password: $PYPI_TOKEN
       - deploy:
@@ -75,6 +73,6 @@ workflows:
             - tests
           filters:
             tags:
-              only: v*
+              only: /^v[0-9]+\.[0-9]+.[0-9]+\.dev[0-9]*$/
           twine_repository: testpypi
           twine_password: $TESTPYPI_TOKEN

@@ -87,6 +87,8 @@ class DataLoader:
           transfers between workers and the main process. That shared
           memory is divided into num_worker * prefetch_factor slots.
         - timeout is not implemented
+        - a pool of shared memory with a fixed size (shm_size) is used for
+          zero-copy buffer transfers from workers.
         """
         # sampling/batching
         self.dataset = dataset
@@ -113,6 +115,7 @@ class DataLoader:
 
     def make_sequence(self):
         """Build a sequence that looks like a dataloader when iterated over."""
+        # shuffling
         if self.batch_sampler:
             batch_indices = list(self.batch_sampler)
             out = seqtools.smap(lambda bi: [self.dataset[i] for i in bi], batch_indices)

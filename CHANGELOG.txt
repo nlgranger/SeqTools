@@ -1,9 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2020-12-26
+### Added
+- usage of shared-memory for process-based prefetching (requires python >= 3.8)
+
+### Removed
+- 'sharedmem' prefetching backend
+- support for python <= 3.5
+
 ## [1.0.0] - 2019-12-27
 ### Added
-- prefteching using shared memory for zero-copy data transfer
+- prefetching using shared memory for zero-copy data transfer
 - case and switch functions
 
 ### Changed
@@ -17,7 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.9.0] - 2018-09-10
 ### Added
-- improved documention
+- improved documentation
 
 ### Changed
 - changed user-code error reporting (more idiomatic)
