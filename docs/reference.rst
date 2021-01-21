@@ -21,6 +21,7 @@ API Reference
    interleave
    cycle
    repeat
+   uniter
    switch
    case
    batch
@@ -51,6 +52,7 @@ Indexing and reshaping
 .. autofunction:: interleave
 .. autofunction:: cycle
 .. autofunction:: repeat
+.. autofunction:: uniter
 .. autofunction:: batch
 .. autofunction:: unbatch
 .. autofunction:: split

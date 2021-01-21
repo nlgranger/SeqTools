@@ -1,6 +1,6 @@
 from random import random, randint
 import pytest
-from seqtools import arange, case, switch, gather, cycle, interleave, repeat
+from seqtools import arange, case, switch, gather, cycle, interleave, repeat, uniter
 
 
 def test_arange():
@@ -177,3 +177,22 @@ def test_repeat():
         r[80:-10] = list(range(10))
     r[80:91] = list(range(10))
     assert r[0] == 9
+
+
+def test_uniter():
+    iterable = range(100)
+    uniterator = uniter(iterable, 10)
+    for i in range(100):
+        assert uniterator[i] == i
+
+    assert uniterator[90] == 90
+
+    for _ in range(50):
+        i = randint(0, 99)
+        assert uniterator[i] == i
+
+    uniterator = uniter(iterable, 10, n_parallel=5)
+
+    for _ in range(100):
+        i = randint(0, 99)
+        assert uniterator[i] == i
