@@ -21,7 +21,7 @@ from .evaluation import prefetch
 from .errors import EvaluationError, seterr
 from .buffering import add_cache
 from .indexing import arange, case, gather, take, cycle, interleave, \
-    repeat, switch
+    repeat, switch, uniter
 from .mapping import smap, starmap
 from .serialization import SerializableFunc
 from .shape import collate, concatenate, batch, unbatch, split
@@ -32,6 +32,6 @@ __all__ = [
     'EvaluationError', 'seterr',
     'add_cache',
     'arange', 'case', 'gather', 'take', 'cycle', 'interleave',
-    'repeat', 'switch',
+    'repeat', 'switch', 'uniter',
     'smap', 'starmap',
     'collate', 'concatenate', 'batch', 'unbatch', 'split']

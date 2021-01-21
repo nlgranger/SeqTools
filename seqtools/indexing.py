@@ -1,9 +1,10 @@
-import bisect
-import itertools
 from array import array
+import bisect
+from collections import deque
+import itertools
 from numbers import Integral
 
-from .utils import isint, basic_getitem, basic_setitem, normalize_slice
+from .utils import basic_getitem, basic_setitem, isint, normalize_slice
 
 
 class Arange:
@@ -476,3 +477,92 @@ def case(selector, *values):
         values (Sequence): data sequences
     """
     return Case(selector, *values)
+
+
+class UnIter:
+    def __init__(self, iterable, cache_size=0):
+        self.iterable = iterable
+        self.it = iter(iterable)
+        self.next_i = 0
+        self.cache = deque(maxlen=cache_size)
+
+    @property
+    def i(self):
+        return self.next_i - len(self.cache)
+
+    def __getitem__(self, item):
+        if self.i <= item < self.next_i:
+            return self.cache[item - self.next_i]
+
+        if item < self.i:
+            self.it = iter(self.iterable)
+            self.next_i = 0
+            self.cache.clear()
+
+        for _ in range(item - self.next_i):
+            self.cache.append(next(self.it))
+
+        value = next(self.it)
+        self.cache.append(value)
+        self.next_i = item + 1
+
+        return value
+
+
+class ParallelUniter:
+    def __init__(self, iterable, n_parallel=2, cache_size=0):
+        self.uniterators = [UnIter(iterable, cache_size) for _ in range(n_parallel)]
+
+    def __getitem__(self, item):
+        closest_ui = 0
+        for i, ui in enumerate(self.uniterators):
+            if ui.i <= item:
+                closest_ui = i
+        
+        if self.uniterators[closest_ui].i > item:  # an iterator must be restarted
+            self.uniterators.insert(0, self.uniterators.pop(-1))
+            closest_ui = 0
+
+        value = self.uniterators[closest_ui][item]
+
+        return value
+
+
+def uniter(iterable, cache_size=0, n_parallel=1):
+    """Simulate an indexable sequence from iterable.
+
+    Args:
+        iterable: an iterable
+        cache_size (int): number of cached values
+        n_parallel (int): number of simutenously active iterators
+    
+    Example:
+    
+        >>> class LineIter:
+        >>>     def __init__(self, filename):
+        >>>         self.filename = filename
+        >>>
+        >>>     def __iter__(self):
+        >>>         with open(self.filename) as f:
+        >>>             for line in f:
+        >>>                 yield line
+        >>>
+        >>> readme = seqtools.uniter(LineIter("README.rst"), 
+        ...                          cache_size=10, n_parallel=5)
+        >>> readme[50]
+        'Example'
+        >>> readme[20]
+        'SeqTools'
+
+    Note:
+        The iterable must support mutiple restarts and also having
+        multiple iterators simultaneously when `n_parallel` > 1.
+
+    In case of random item access, increase both the cache size and the number
+    of iterators in order to avoid frequent iterator restarts and reduce the 
+    average number of wasted iterator steps before reaching the desired item.
+    """
+    if n_parallel > 1:
+        return ParallelUniter(iterable, n_parallel, cache_size)
+    else:
+        return UnIter(iterable, cache_size)
