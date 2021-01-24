@@ -4,7 +4,6 @@ import threading
 
 class EvaluationError(Exception):
     """Raised when evaluating an element fails."""
-    pass
 
 
 # Settings --------------------------------------------------------------------
@@ -36,6 +35,7 @@ def seterr(evaluation=None):
 
 class ErrorConfig(threading.local):
     def __init__(self):
+        super().__init__()
         self.passthrough = False
 
 

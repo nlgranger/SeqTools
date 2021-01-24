@@ -1,4 +1,7 @@
+from abc import ABC, abstractmethod
+import itertools
 import multiprocessing
+from multiprocessing import sharedctypes
 import os
 import pickle as pkl
 import platform
@@ -8,14 +11,11 @@ import sys
 import threading
 import time
 import weakref
-from abc import ABC, abstractmethod
-from multiprocessing import sharedctypes
-import itertools
 
 from tblib import pickling_support
 
 from .C.refcountedbuffer import RefCountedBuffer
-from .errors import format_stack, EvaluationError, seterr
+from .errors import EvaluationError, format_stack, seterr
 from .utils import get_logger
 
 
@@ -125,7 +125,7 @@ class ProcessBacked(AsyncWorker):
             p = multiprocessing.connection.wait(self.result_pipes, timeout=1)
             if len(p) > 0:
                 break
-            elif self.worker_died.is_set():
+            if self.worker_died.is_set():
                 raise RuntimeError("a worker died unexpectedly")
 
         try:

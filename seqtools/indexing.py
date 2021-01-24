@@ -3,6 +3,7 @@ import bisect
 from collections import deque
 import itertools
 from numbers import Integral
+from typing import Sequence
 
 from .utils import basic_getitem, basic_setitem, isint, normalize_slice
 
@@ -57,14 +58,14 @@ def arange(start, stop=None, step=None):
     return Arange(start, stop, step)
 
 
-class Gathering(object):
-    def __init__(self, sequence, indexes):
+class Gathering:
+    def __init__(self, sequence, indexes: Sequence[int]):
         if isinstance(sequence, Gathering):  # optimize nested subsets
-            indexes = array('l', (sequence.indexes[i] for i in indexes))
-            sequence = sequence.sequence
-
-        self.sequence = sequence
-        self.indexes = indexes
+            self.indexes = [sequence.indexes[i] for i in indexes]
+            self.sequence = sequence.sequence
+        else:
+            self.indexes = indexes
+            self.sequence = sequence
 
     def __len__(self):
         return len(self.indexes)
@@ -482,7 +483,7 @@ def case(selector, *values):
 class UnIter:
     def __init__(self, iterable, cache_size=0):
         self.iterable = iterable
-        self.it = iter(iterable)
+        self.iterator = iter(iterable)
         self.next_i = 0
         self.cache = deque(maxlen=cache_size)
 
@@ -495,14 +496,14 @@ class UnIter:
             return self.cache[item - self.next_i]
 
         if item < self.i:
-            self.it = iter(self.iterable)
+            self.iterator = iter(self.iterable)
             self.next_i = 0
             self.cache.clear()
 
         for _ in range(item - self.next_i):
-            self.cache.append(next(self.it))
+            self.cache.append(next(self.iterator))
 
-        value = next(self.it)
+        value = next(self.iterator)
         self.cache.append(value)
         self.next_i = item + 1
 
@@ -514,16 +515,16 @@ class ParallelUniter:
         self.uniterators = [UnIter(iterable, cache_size) for _ in range(n_parallel)]
 
     def __getitem__(self, item):
-        closest_ui = 0
+        closest = 0
         for i, ui in enumerate(self.uniterators):
             if ui.i <= item:
-                closest_ui = i
-        
-        if self.uniterators[closest_ui].i > item:  # an iterator must be restarted
-            self.uniterators.insert(0, self.uniterators.pop(-1))
-            closest_ui = 0
+                closest = i
 
-        value = self.uniterators[closest_ui][item]
+        if self.uniterators[closest].i > item:  # an iterator must be restarted
+            self.uniterators.insert(0, self.uniterators.pop(-1))
+            closest = 0
+
+        value = self.uniterators[closest][item]
 
         return value
 

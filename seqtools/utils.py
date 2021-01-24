@@ -147,7 +147,7 @@ def normalize_slice(start, stop, step, size):
     return start, stop, step
 
 
-class SeqSlice(object):
+class SeqSlice:
     def __init__(self, sequence, key):
         if isinstance(sequence, SeqSlice):
             key_start, key_stop, key_step = normalize_slice(

@@ -7,7 +7,7 @@ import itertools
 from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
 
 
-class Collation(object):
+class Collation:
     def __init__(self, sequences):
         try:
             lengths = [len(s) for s in sequences]

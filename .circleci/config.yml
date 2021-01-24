@@ -66,6 +66,8 @@ workflows:
           filters:
             tags:
               only: /^v[0-9]+\.[0-9]+\.[0-9]+$/
+            branches:
+              ignore: /.*/
           twine_repository: pypi
           twine_password: $PYPI_TOKEN
       - deploy:
@@ -73,6 +75,8 @@ workflows:
             - tests
           filters:
             tags:
-              only: /^v[0-9]+\.[0-9]+.[0-9]+\.dev[0-9]*$/
+              only: /^v.*/
+            branches:
+              ignore: /.*/
           twine_repository: testpypi
           twine_password: $TESTPYPI_TOKEN

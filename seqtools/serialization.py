@@ -12,7 +12,7 @@ import tempfile
 from importlib import import_module, reload
 
 
-class SerializableFunc(object):
+class SerializableFunc:
     """Decorate a function to become independent from its source file.
 
     Should one pickle a mapping object involving a decorated function, the
@@ -32,7 +32,10 @@ class SerializableFunc(object):
             self.func = func.func
         else:
             self.name = func.__name__
-            with open(inspect.getsourcefile(func)) as dump_file:
+            filename = inspect.getsourcefile(func)
+            if filename is None:
+                raise RuntimeError("failed to locate source file for " + func.__name__)
+            with open(filename) as dump_file:
                 self.source = dump_file.read()
             self.func = func
             functools.update_wrapper(self, func)

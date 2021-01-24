@@ -5,7 +5,7 @@ from time import monotonic, perf_counter
 from .utils import isint, basic_getitem
 
 
-class Debug(object):
+class Debug:
     def __init__(self, sequence, func, max_calls, max_rate):
         self.sequence = sequence
         self.max_calls = max_calls

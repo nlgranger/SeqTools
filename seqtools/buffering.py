@@ -4,7 +4,7 @@ import threading
 from .utils import basic_getitem, basic_setitem
 
 
-class CachedSequence(object):
+class CachedSequence:
     def __init__(self, sequence, cache_size=1, cache=None):
         self.sequence = sequence
         self.cache = OrderedDict() if cache is None else cache
