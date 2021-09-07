@@ -20,68 +20,60 @@
 SeqTools
 ========
 
-SeqTools facilitates the manipulation of datasets and the evaluation of a
-transformation pipeline. Some of the provided functionalities include: mapping
-element-wise operations, reordering, reindexing, concatenation, joining,
-slicing, minibatching, `etc
-<https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
+SeqTools extends the functionalities of itertools to indexable (list-like)
+objects. Some of the provided functionalities include: element-wise function
+mapping, reordering, reindexing, concatenation, joining, slicing, minibatching,
+`etc <https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
 
-To improve ease of use, SeqTools manipulates **list-like objects**, otherwise
-known as a `sequences <https://docs.python.org/3/glossary.html#term-sequence>`_
-(objects with a length supporting integer or slice based indexing).
-
-Manipulating a dataset as a whole can be slow and resource/memory intensive. To
-circumvent this issue, SeqTools implements **on-demand evaluation** under the
-hood: operations and transformations on a dataset are only applied to individual
-items when they are actually accessed. This is particularly convenient for
-prototyping.
-
-When comes the transition from prototyping to execution, the list-like container
-interface facilitates serial evaluation. Besides, SeqTools also provides simple
-helpers to dispatch work between multiple workers (threads or processes).
+SeqTools functions implement **on-demand evaluation** under the hood:
+operations and transformations are only applied to individual items when they
+are actually accessed. A simple but powerful prefetch function is also provided
+to quickly evaluate elements.
 
 SeqTools originally targets data science, more precisely the data preprocessing
 stages. Being aware of the experimental nature of this usage,
-on-demand execution is made as transparent as possible to users by providing
-fault-tolerant functions and insightful error reporting. Moreover, internal code
-is kept concise and clear with comments to facilitate error tracing through a
-failing transformation pipeline.
+on-demand execution is made as transparent as possible by providing
+**fault-tolerant functions and insightful error message**.
+
+Example
+-------
 
 Example
 -------
 
 >>> def f1(x):
-... return x + 1
+...     return x + 1
 ...
->>> def f2(x): # slow and memory heavy transformation
-... time.sleep(.01)
-... return [x for _ in range(500)]
+>>> def f2(x):  # slow and memory heavy transformation
+...     time.sleep(.01)
+...     return [x for _ in range(500)]
 ...
 >>> def f3(x):
-... return sum(x) / len(x)
+...     return sum(x) / len(x)
 ...
 >>> data = list(range(1000))
 
-Without delayed evaluation, defining the pipeline and reading values looks like
+Without seqtools, defining the pipeline and reading values looks like
 so:
 
 >>> tmp1 = [f1(x) for x in data]
->>> tmp2 = [f2(x) for x in tmp1] # takes 10 seconds and a lot of memory
+>>> tmp2 = [f2(x) for x in tmp1]  # takes 10 seconds and a lot of memory
 >>> res = [f3(x) for x in tmp2]
 >>> print(res[2])
 3.0
->>> print(max(tmp2[2])) # requires to store 499 500 useless values along
+>>> print(max(tmp2[2]))  # requires to store 499 500 useless values along
 3
 
 With seqtools:
 
 >>> tmp1 = seqtools.smap(f1, data)
 >>> tmp2 = seqtools.smap(f2, tmp1)
->>> res = seqtools.smap(f3, tmp2) # no computations so far
->>> print(res[2]) # takes 0.01 seconds
+>>> res = seqtools.smap(f3, tmp2)  # no computations so far
+>>> print(res[2])  # takes 0.01 seconds
 3.0
->>> print(max(tmp2[2])) # easy access to intermediate results
+>>> print(max(tmp2[2]))  # easy access to intermediate results
 3
+
 
 Batteries included!
 -------------------
@@ -108,11 +100,15 @@ The library comes with a set of functions to manipulate sequences:
 
 .. _interleaving: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.interleave
 
+.. |uniter| image:: docs/_static/uniter.png
+
+.. _uniter: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.uniter
+
 ==================== ================= ===============
 | `concatenation`_   | `batching`_     | `reindexing`_
 | |concatenate|      | |batch|         | |gather|
-| `prefetching`_     | `interleaving`_
-| |prefetch|         | |interleaving|
+| `prefetching`_     | `interleaving`_ | `uniter`_
+| |prefetch|         | |interleaving|  | |uniter|
 ==================== ================= ===============
 
 and others (suggestions are also welcome).

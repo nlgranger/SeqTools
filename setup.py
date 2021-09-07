@@ -15,7 +15,6 @@ setup(
     author_email="nicolas.granger.m@gmail.com",
     keywords=['mapping', 'lazy', 'delayed', 'pipeline', 'processing'],
     license="Mozilla Public License 2.0 (MPL 2.0)",
-    license_file="LICENSE.txt",
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: Implementation :: CPython",

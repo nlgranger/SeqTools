@@ -438,6 +438,10 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
     else:
         raise ValueError("invalid prefetching method")
 
-    return Prefetch(len(seq), backend,
+    try:
+        size = len(seq)
+    except TypeError:
+        size = None
+    return Prefetch(size, backend,
                     buffer_size=max_buffered,
                     init_stack=format_stack())

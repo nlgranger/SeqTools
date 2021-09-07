@@ -191,8 +191,8 @@ def test_uniter():
         i = randint(0, 99)
         assert uniterator[i] == i
 
-    uniterator = uniter(iterable, 10, n_parallel=5)
+    uniterator = uniter(iterable, 10, n_parallel=5, size=100)
 
     for _ in range(100):
-        i = randint(0, 99)
-        assert uniterator[i] == i
+        i = randint(-99, 99)
+        assert uniterator[i] == (i % 100)

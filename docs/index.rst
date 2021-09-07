@@ -16,32 +16,20 @@ SeqTools
    import time
 
 
-SeqTools facilitates the manipulation of datasets and the evaluation of a
-transformation pipeline. Some of the provided functionalities include: mapping
-element-wise operations, reordering, reindexing, concatenation, joining,
-slicing, minibatching, `etc
-<https://seqtools-doc.readthedocs.io/en/stable/reference.html>`_.
+SeqTools extends the functionalities of itertools to indexable (list-like)
+objects. Some of the provided functionalities include: element-wise function
+mapping, reordering, reindexing, concatenation, joining, slicing, minibatching,
+`etc <reference.html>`_.
 
-To improve ease of use, SeqTools manipulates **list-like objects**, otherwise
-known as a `sequences <https://docs.python.org/3/glossary.html#term-sequence>`_
-(objects with a length supporting integer or slice based indexing).
-
-Manipulating a dataset as a whole can be slow and resource/memory intensive. To
-circumvent this issue, SeqTools implements **on-demand evaluation** under the
-hood: operations and transformations on a dataset are only applied to individual
-items when they are actually accessed. This is particularly convenient for
-prototyping.
-
-When comes the transition from prototyping to execution, the list-like container
-interface facilitates serial evaluation. Besides, SeqTools also provides simple
-helpers to dispatch work between multiple workers (threads or processes).
+SeqTools functions implement **on-demand evaluation** under the hood:
+operations and transformations are only applied to individual items when they
+are actually accessed. A simple but powerful prefetch function is also provided
+to quickly evaluate elements.
 
 SeqTools originally targets data science, more precisely the data preprocessing
 stages. Being aware of the experimental nature of this usage,
-on-demand execution is made as transparent as possible to users by providing
-fault-tolerant functions and insightful error reporting. Moreover, internal code
-is kept concise and clear with comments to facilitate error tracing through a
-failing transformation pipeline.
+on-demand execution is made as transparent as possible by providing
+**fault-tolerant functions and insightful error message**.
 
 
 Example
@@ -106,11 +94,15 @@ The library comes with a set of functions to manipulate sequences:
 
 .. _interleaving: reference.html#seqtools.interleave
 
+.. |uniter| image:: _static/uniter.png
+
+.. _uniter: reference.html#seqtools.uniter
+
 ==================== ================= ===============
 | `concatenation`_   | `batching`_     | `reindexing`_
 | |concatenate|      | |batch|         | |gather|
-| `prefetching`_     | `interleaving`_
-| |prefetch|         | |interleaving|
+| `prefetching`_     | `interleaving`_ | `uniter`_
+| |prefetch|         | |interleaving|  | |uniter|
 ==================== ================= ===============
 
 and others (suggestions are also welcome).

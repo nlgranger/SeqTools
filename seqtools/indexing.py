@@ -289,6 +289,22 @@ class Interleaving(object):
         self.sequences[seq][idx] = value
 
 
+class IterInterleaving:
+    def __init__(self, sequences) -> None:
+        self.sequences = sequences
+
+    def __iter__(self):
+        iterators = [iter(seq) for seq in self.sequences]
+        i = -1
+        while len(iterators) > 0:
+            i = (i + 1) % len(iterators)
+            try:
+                yield next(iterators[i])
+            except StopIteration:
+                del iterators[i]
+                i -= 1
+
+
 def interleave(*sequences):
     """Interleave elements from several sequences into one.
 
@@ -308,7 +324,13 @@ def interleave(*sequences):
         >>> list(interleave(arr1, arr2, arr3))
         [1, 'a', 0.1, 2, 'b', 0.2, 3, 'c', 0.3, 4, 0.4, 5]
     """
-    return Interleaving(sequences)
+    try:
+        for s in sequences:
+            len(s)
+    except TypeError:
+        return IterInterleaving(sequences)
+    else:
+        return Interleaving(sequences)
 
 
 class Repetition(object):
@@ -481,8 +503,9 @@ def case(selector, *values):
 
 
 class UnIter:
-    def __init__(self, iterable, cache_size=0):
+    def __init__(self, iterable, cache_size=0, size=None):
         self.iterable = iterable
+        self.size = size
         self.iterator = iter(iterable)
         self.next_i = 0
         self.cache = deque(maxlen=cache_size)
@@ -491,7 +514,22 @@ class UnIter:
     def i(self):
         return self.next_i - len(self.cache)
 
+    def __len__(self):
+        if self.size is not None:
+            return self.size
+        else:
+            raise TypeError('Unknown iterator len')
+
     def __getitem__(self, item):
+        if item < 0 and self.size is not None:
+            item += self.size
+        if item < 0 and self.size is None:
+            raise IndexError(
+                f"cannot use negative indexing on {self.__class__.__name__} "
+                "with unknown size.")
+        if item < 0 or (self.size is not None and item >= self.size):
+            raise IndexError(self.__class__.__name__ + " index out of range")
+
         if self.i <= item < self.next_i:
             return self.cache[item - self.next_i]
 
@@ -511,10 +549,26 @@ class UnIter:
 
 
 class ParallelUniter:
-    def __init__(self, iterable, n_parallel=2, cache_size=0):
+    def __init__(self, iterable, n_parallel=2, cache_size=0, size=None):
         self.uniterators = [UnIter(iterable, cache_size) for _ in range(n_parallel)]
+        self.size = size
+
+    def __len__(self):
+        if self.size is not None:
+            return self.size
+        else:
+            raise TypeError('Unknown iterator len')
 
     def __getitem__(self, item):
+        if item < 0 and self.size is not None:
+            item += self.size
+        if item < 0 and self.size is None:
+            raise IndexError(
+                f"cannot use negative indexing on {self.__class__.__name__} "
+                "with unknown size.")
+        if item < 0 or (self.size is not None and item >= self.size):
+            raise IndexError(self.__class__.__name__ + " index out of range")
+
         closest = 0
         for i, ui in enumerate(self.uniterators):
             if ui.i <= item:
@@ -529,13 +583,26 @@ class ParallelUniter:
         return value
 
 
-def uniter(iterable, cache_size=0, n_parallel=1):
+def uniter(iterable, cache_size=0, n_parallel=1, size=None):
     """Simulate an indexable sequence from an iterable.
 
     Args:
         iterable: an iterable
         cache_size (int): number of cached values
-        n_parallel (int): number of simutenously active iterators
+        n_parallel (int): number of simultaneously active iterators
+        size (int, optional):
+            optional value to set `len`, otherwise `len` will raise
+            `NotImplementedError`.
+
+    .. image:: _static/uniter.png
+       :alt: uniter
+       :width: 15%
+       :align: center
+
+    This works by starting, incrementing and restarting one or several iterators
+    to reach requested items. To avoid wasting steps, a cache is implemented
+    and multiple iterators can run in parallel so that one is always closer than
+    the others to requested items.
 
     Example:
 
@@ -548,22 +615,14 @@ def uniter(iterable, cache_size=0, n_parallel=1):
         ...             for line in f:
         ...                 yield line
         ...
-        >>> readme = seqtools.uniter(LineIter("README.rst"),
+        >>> readme = seqtools.uniter(LineIter("LICENSE.txt"),
         ...                          cache_size=10, n_parallel=5)
-        >>> readme[49]
-        'Example\\n'
-        >>> readme[19]
-        'SeqTools\\n'
-
-    Note:
-        The iterable must support mutiple restarts and also having
-        multiple iterators simultaneously when `n_parallel` > 1.
-
-    In case of random access, increase both the cache size and the number of
-    iterators in order to avoid frequent iterator restarts and reduce the
-    average number of wasted iterator steps before reaching the desired item.
+        >>> readme[3]
+        '1. Definitions\\n'
+        >>> readme[1]
+        '==================================\\n'
     """
     if n_parallel > 1:
-        return ParallelUniter(iterable, n_parallel, cache_size)
+        return ParallelUniter(iterable, n_parallel, cache_size, size)
     else:
-        return UnIter(iterable, cache_size)
+        return UnIter(iterable, cache_size, size)
