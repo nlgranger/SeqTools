@@ -17,20 +17,6 @@ def pickle_tensor(t: torch.Tensor):
 copyreg.pickle(torch.Tensor, pickle_tensor)
 
 
-def into_tensors(value):
-    """Convert arrays inside an object into tensors."""
-    if isinstance(value, torch.Tensor):
-        return value
-    elif isinstance(value, np.ndarray):
-        return torch.from_numpy(value)
-    elif isinstance(value, (tuple, list)):
-        return value.__class__(into_tensors(v) for v in value)
-    elif isinstance(value, dict):
-        return value.__class__((k, into_tensors(v)) for k, v in value.items())
-    else:
-        return torch.tensor(value)
-
-
 def pin_tensors_memory(value):
     """Pin memory of tensors inside an object."""
     if isinstance(value, (tuple, list)):
@@ -146,9 +132,6 @@ class DataLoader:
                 method='process',
                 start_hook=self.worker_init_fn,
                 shm_size=self.shm_size)
-
-        # convert into tensors
-        out = seqtools.smap(into_tensors, out)
 
         # pin memory
         if self.pin_memory:

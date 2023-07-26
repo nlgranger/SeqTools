@@ -28,7 +28,7 @@ mapping, reordering, reindexing, concatenation, joining, slicing, minibatching,
 SeqTools functions implement **on-demand evaluation** under the hood:
 operations and transformations are only applied to individual items when they
 are actually accessed. A simple but powerful prefetch function is also provided
-to quickly evaluate elements.
+to eagerly evaluate elements in background threads or processes.
 
 SeqTools originally targets data science, more precisely the data preprocessing
 stages. Being aware of the experimental nature of this usage,
@@ -38,13 +38,12 @@ on-demand execution is made as transparent as possible by providing
 Example
 -------
 
-Example
--------
+Successively map three functions on a list of values:
 
 >>> def f1(x):
 ...     return x + 1
 ...
->>> def f2(x):  # slow and memory heavy transformation
+>>> def f2(x):                    # slow transformation
 ...     time.sleep(.01)
 ...     return [x for _ in range(500)]
 ...
@@ -52,16 +51,12 @@ Example
 ...     return sum(x) / len(x)
 ...
 >>> data = list(range(1000))
-
-Without seqtools, defining the pipeline and reading values looks like
-so:
-
 >>> tmp1 = [f1(x) for x in data]
->>> tmp2 = [f2(x) for x in tmp1]  # takes 10 seconds and a lot of memory
+>>> tmp2 = [f2(x) for x in tmp1]  # takes 10+ seconds
 >>> res = [f3(x) for x in tmp2]
 >>> print(res[2])
 3.0
->>> print(max(tmp2[2]))  # requires to store 499 500 useless values along
+>>> max(tmp2[2])                  # check intermediate value
 3
 
 With seqtools:
@@ -69,9 +64,9 @@ With seqtools:
 >>> tmp1 = seqtools.smap(f1, data)
 >>> tmp2 = seqtools.smap(f2, tmp1)
 >>> res = seqtools.smap(f3, tmp2)  # no computations so far
->>> print(res[2])  # takes 0.01 seconds
+>>> print(res[2])                  # only evaluates f1, f2, f3 on index 2
 3.0
->>> print(max(tmp2[2]))  # easy access to intermediate results
+>>> print(max(tmp2[2]))            # (re)evaluates f1, f2 on index 2
 3
 
 

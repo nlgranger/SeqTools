@@ -214,7 +214,7 @@ def test_prefetch_crash(method):
 
     # worker dies
     with tempfile.TemporaryDirectory() as d:
-        def init_fn():
+        def init_fn(worker_id):
             signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
             with open('{}/{}'.format(d, os.getpid()), "w"):
                 pass
@@ -230,10 +230,10 @@ def test_prefetch_crash(method):
 
         sleep(0.1)
 
-        while True:
-            if len(os.listdir(d)) > 0:
-                os.kill(int(os.listdir(d)[0]), signal.SIGUSR1)
-                break
+        while len(os.listdir(d)) == 0:
+            sleep(0.05)
+
+        os.kill(int(os.listdir(d)[0]), signal.SIGUSR1)
 
         with pytest.raises(RuntimeError):
             for i in range(0, 1000):
@@ -241,7 +241,7 @@ def test_prefetch_crash(method):
 
     # parent dies
     with tempfile.TemporaryDirectory() as d:
-        def init_fn():
+        def init_fn(worker_id):
             signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
             with open('{}/{}'.format(d, os.getpid()), "w"):
                 pass
@@ -258,7 +258,7 @@ def test_prefetch_crash(method):
         p = Process(target=target)
         p.start()
 
-        while len(os.listdir(d)) < 4:
+        while len(os.listdir(d)) == 0:
             sleep(0.05)
 
         os.kill(p.pid, signal.SIGUSR1)

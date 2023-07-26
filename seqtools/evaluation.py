@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from copyreg import dispatch_table
+import functools
 import itertools
 import multiprocessing
 from multiprocessing import sharedctypes
@@ -11,6 +13,7 @@ import sys
 import threading
 import time
 import weakref
+import io
 
 from tblib import pickling_support
 
@@ -22,6 +25,7 @@ from .utils import get_logger
 pickling_support.install()
 
 logger = get_logger(__name__)
+mp_ctx = multiprocessing.get_context()
 
 
 # Asynchronous item fetching backends -----------------------------------------
@@ -61,16 +65,16 @@ class ProcessBacked(AsyncWorker):
             self.free_shm_slots = set()
 
         # initialize workers
-        self.job_queue = multiprocessing.Queue()
+        self.job_queue = mp_ctx.Queue()
         self.result_pipes = []
 
         self.workers = []
-        for _ in range(num_workers):
-            rx, tx = multiprocessing.Pipe(duplex=False)
+        for i in range(num_workers):
+            rx, tx = mp_ctx.Pipe(duplex=False)
 
-            worker = multiprocessing.Process(
+            worker = mp_ctx.Process(
                 target=self.__class__.worker,
-                args=(seq, self.job_queue, self.shm, self.shm_slot_size, tx, init_fn),
+                args=(seq, self.job_queue, self.shm, self.shm_slot_size, tx, init_fn, i),
                 daemon=True)
             old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
             worker.start()
@@ -152,12 +156,12 @@ class ProcessBacked(AsyncWorker):
         return item, success, value
 
     @staticmethod
-    def worker(seq, job_queue, shm, shm_slot_size, result_pipe, init_fn):
+    def worker(seq, job_queue, shm, shm_slot_size, result_pipe, init_fn, index):
         ppid = os.getppid()
         logger.debug("worker started")
 
         if init_fn is not None:
-            init_fn()
+            init_fn(index)
 
         seterr('passthrough')
 

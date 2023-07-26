@@ -126,9 +126,8 @@ To finally compute all the values from a sequence, :func:`prefetch` provides
 a wrapper backed by multiple workers to compute the values more quickly.
 
 To see the library in practice, you can see how to :ref:`build, debug and run a
-transformation pipeline <Building and running a preprocessing pipeline>` over
-and image dataset, write a multiprocessing capable :ref:`minibatch iterator
-<Fast minibatch sampling>`
+transformation pipeline <Building and running a preprocessing pipeline>` or 
+write a multiprocessing capable :ref:`minibatch iterator <Fast minibatch sampling>`
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?

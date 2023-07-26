@@ -606,21 +606,12 @@ def uniter(iterable, cache_size=0, n_parallel=1, size=None):
 
     Example:
 
-        >>> class LineIter:
-        ...     def __init__(self, filename):
-        ...         self.filename = filename
-        ...
-        ...     def __iter__(self):
-        ...         with open(self.filename) as f:
-        ...             for line in f:
-        ...                 yield line
-        ...
-        >>> readme = seqtools.uniter(LineIter("LICENSE.txt"),
-        ...                          cache_size=10, n_parallel=5)
-        >>> readme[3]
-        '1. Definitions\\n'
-        >>> readme[1]
-        '==================================\\n'
+        >>> iterable = range(5000)
+        >>> a = seqtools.uniter(iterable, cache_size=10, n_parallel=5, size=5000)
+        >>> a[10]
+        10
+        >>> a[1]
+        1
     """
     if n_parallel > 1:
         return ParallelUniter(iterable, n_parallel, cache_size, size)
