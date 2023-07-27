@@ -1,5 +1,5 @@
-from collections import OrderedDict
 import threading
+from collections import OrderedDict
 
 from .utils import basic_getitem, basic_setitem
 

@@ -2,7 +2,7 @@
 
 from time import monotonic, perf_counter
 
-from .utils import isint, basic_getitem
+from .utils import basic_getitem, isint
 
 
 class Debug:
@@ -105,7 +105,8 @@ class ThroughputMonitor(object):
         """Returns average measured throughput."""
         if self.n_calls == 0:
             raise RuntimeError(
-                "cannot measure throughput before any element was accessed")
+                "cannot measure throughput before any element was accessed"
+            )
 
         return self.n_calls / self.time_spent
 
@@ -113,7 +114,8 @@ class ThroughputMonitor(object):
         """Return average measured time spent accessing items."""
         if self.n_calls == 0:
             raise RuntimeError(
-                "cannot measure read delay before any element was accessed")
+                "cannot measure read delay before any element was accessed"
+            )
 
         return self.time_spent / self.n_calls
 
@@ -125,11 +127,11 @@ class ThroughputMonitor(object):
             raise TypeError(
                 self.__class__.__name__
                 + " indices must be integers, not "
-                + key.__class__.__name__)
+                + key.__class__.__name__
+            )
 
         if key < -len(self) or key >= len(self):
-            raise IndexError(
-                self.__class__.__name__ + " index out of range")
+            raise IndexError(self.__class__.__name__ + " index out of range")
 
         if key < 0:
             key = len(self) + key

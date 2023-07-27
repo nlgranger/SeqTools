@@ -11,7 +11,7 @@ class Mapping(object):
 
         self.sequences = sequences
         self.f = f
-        self.stack = format_stack(2)
+        self.stack = format_stack(3)
 
     def __len__(self):
         return len(self.sequences[0])
@@ -24,11 +24,12 @@ class Mapping(object):
                 i += 1
 
         except Exception as error:
-            if seterr() == 'passthrough' or isinstance(error, EvaluationError):
+            if seterr() == "passthrough" or isinstance(error, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
-                    i, self.__class__.__name__, self.stack)
+                    i, self.__class__.__name__, self.stack
+                )
                 raise EvaluationError(msg) from error
 
     @basic_getitem
@@ -37,11 +38,12 @@ class Mapping(object):
             return self.f(*(l[item] for l in self.sequences))
 
         except Exception as cause:
-            if seterr() == 'passthrough' or isinstance(cause, EvaluationError):
+            if seterr() == "passthrough" or isinstance(cause, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
-                    item, self.__class__.__name__, self.stack)
+                    item, self.__class__.__name__, self.stack
+                )
                 raise EvaluationError(msg) from cause
 
 
@@ -54,9 +56,8 @@ def smap(f, *sequences):
     items will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
 
-    .. image:: _static/smap.png
+    .. image:: _static/smap.svg
        :alt: smap
-       :width: 20%
        :align: center
 
     Example:

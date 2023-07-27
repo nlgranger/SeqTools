@@ -54,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'SeqTools'
-copyright = '2017-2018, Nicolas Granger'
+copyright = '2017-2023, Nicolas Granger'
 author = 'Nicolas Granger'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -98,17 +98,8 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 
-try:
-    import sphinx_rtd_theme
-except ImportError:
-    pass
-else:
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-    html_theme_options = {
-        'collapse_navigation': False,
-        'display_version': True
-    }
+html_theme = "furo"
+
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -128,6 +119,10 @@ html_show_sourcelink = False
 
 doctest_global_setup = '''
 import seqtools
+try:
+    import torch
+except ImportError:
+    torch = None
 '''
 
 

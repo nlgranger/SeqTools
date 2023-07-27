@@ -8,6 +8,7 @@ class EvaluationError(Exception):
 
 # Settings --------------------------------------------------------------------
 
+
 def seterr(evaluation=None):
     """Set how errors are handled.
 
@@ -23,14 +24,14 @@ def seterr(evaluation=None):
     Returns:
         The setting value.
     """
-    if evaluation == 'wrap':
+    if evaluation == "wrap":
         error_config.passthrough = False
-    elif evaluation == 'passthrough':
+    elif evaluation == "passthrough":
         error_config.passthrough = True
     elif evaluation is not None:
         raise ValueError("evaluation must be 'wrap' or 'passthrough'")
 
-    return "passthrough" if error_config.passthrough else 'wrap'
+    return "passthrough" if error_config.passthrough else "wrap"
 
 
 class ErrorConfig(threading.local):
@@ -44,6 +45,7 @@ error_config = ErrorConfig()
 
 # Helpers ---------------------------------------------------------------------
 
+
 def unindent(lines):
     if lines is None:
         return []
@@ -56,15 +58,14 @@ def unindent(lines):
         while not line.startswith(prefix):
             prefix = prefix[:-1]
 
-    return [line[len(prefix):] for line in lines]
+    return [line[len(prefix) :] for line in lines]
 
 
 def format_stack(skip=1):
     out = ""
-    for frame in inspect.stack()[:skip:-1]:
+    for frame in inspect.stack()[skip:][::-1]:
         _, filename, lineno, function, code_context, _ = frame
-        out += "  File \"{}\", line {}, in {}\n".format(
-            filename, lineno, function)
+        out += '  File "{}", line {}, in {}\n'.format(filename, lineno, function)
         for line in unindent(code_context):
             out += "    " + line
 

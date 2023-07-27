@@ -1,5 +1,7 @@
-import pytest
 import time
+
+import pytest
+
 from seqtools import smap
 from seqtools.instrument import debug, monitor_throughput
 

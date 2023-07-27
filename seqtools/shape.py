@@ -4,7 +4,7 @@ import array
 import bisect
 import itertools
 
-from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
+from .utils import basic_getitem, basic_setitem, clip, get_logger, isint
 
 
 class Collation:
@@ -39,9 +39,8 @@ def collate(sequences):
 
     The n'th element is a tuple of the n'th elements from each sequence.
 
-    .. image:: _static/collate.png
+    .. image:: _static/collate.svg
        :alt: collate
-       :width: 50%
        :align: center
 
     Example:
@@ -65,8 +64,7 @@ class Concatenation(object):
             else:
                 self.sequences.append(seq)
 
-        self.offsets = array.array(
-            'L', [0] + [len(seq) for seq in self.sequences])
+        self.offsets = array.array("L", [0] + [len(seq) for seq in self.sequences])
         for i in range(1, len(self.sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
@@ -94,9 +92,8 @@ class Concatenation(object):
 def concatenate(sequences):
     """Return a view on the concatenated sequences.
 
-    .. image:: _static/concatenate.png
+    .. image:: _static/concatenate.svg
        :alt: concatenate
-       :width: 25%
        :align: center
 
     Example:
@@ -112,8 +109,9 @@ def concatenate(sequences):
 
 
 class BatchView(object):
-    def __init__(self, sequence, batch_size,
-                 drop_last=False, pad=None, collate_fn=None):
+    def __init__(
+        self, sequence, batch_size, drop_last=False, pad=None, collate_fn=None
+    ):
         self.sequence = sequence
         self.batch_size = batch_size
         self.drop_last = drop_last
@@ -140,8 +138,9 @@ class BatchView(object):
 
     @basic_getitem
     def __getitem__(self, key):
-        result = self.sequence[
-            key * self.batch_size:(key + 1) * self.batch_size]
+        start = key * self.batch_size
+        stop = min((key + 1) * self.batch_size, len(self.sequence))
+        result = [self.sequence[i] for i in range(start, stop)]
 
         if self.pad is not None and key == (len(self) - 1):
             pad_size = self.batch_size - len(self.sequence) % self.batch_size
@@ -157,16 +156,20 @@ class BatchView(object):
         start = key * self.batch_size
         if key == len(self.sequence) // self.batch_size:
             stop = start + len(self.sequence) % self.batch_size
-            expected_value_size = len(self.sequence) % self.batch_size \
-                if self.pad is not None else self.batch_size
+            expected_value_size = (
+                len(self.sequence) % self.batch_size
+                if self.pad is not None
+                else self.batch_size
+            )
 
         else:
             stop = (key + 1) * self.batch_size
             expected_value_size = self.batch_size
 
         if len(value) != expected_value_size:
-            raise ValueError(self.__class__.__name__ + " only support "
-                             "one-to-one assignment")
+            raise ValueError(
+                self.__class__.__name__ + " only support " "one-to-one assignment"
+            )
 
         for i, val in zip(range(start, stop), value):
             self.sequence[i] = val
@@ -175,10 +178,9 @@ class BatchView(object):
 def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
     """Return a view of a sequence in groups of k items.
 
-    .. image:: _static/batch.png
-        :alt: batch
-        :width: 25%
-        :align: center
+    .. image:: _static/batch.svg
+       :alt: batch
+       :align: center
 
     Args:
         sequence (Sequence):
@@ -220,8 +222,7 @@ class Unbatching(object):
         self.last_batch_size = last_batch_size or batch_size
 
     def __len__(self):
-        return max(0, len(self.sequence) - 1) * self.batch_size \
-            + self.last_batch_size
+        return max(0, len(self.sequence) - 1) * self.batch_size + self.last_batch_size
 
     def __iter__(self):
         return itertools.chain.from_iterable(self.sequence)
@@ -260,12 +261,12 @@ class Split(object):
             if size / (edges + 1) % 1 != 0:
                 raise ValueError("edges must divide the size of the sequence")
             step = size // (edges + 1)
-            self.starts = array.array('L', range(0, size, step))
-            self.stops = array.array('L', range(step, size + 1, step))
+            self.starts = array.array("L", range(0, size, step))
+            self.stops = array.array("L", range(step, size + 1, step))
 
         elif isint(edges[0]):
-            self.starts = array.array('L')
-            self.stops = array.array('L')
+            self.starts = array.array("L")
+            self.stops = array.array("L")
             for edge in edges:
                 start = self.stops[-1] if len(self.stops) > 0 else 0
                 stop = edge
@@ -277,8 +278,8 @@ class Split(object):
             self.stops.append(size)
 
         else:
-            self.starts = array.array('L')
-            self.stops = array.array('L')
+            self.starts = array.array("L")
+            self.stops = array.array("L")
             for start, stop in edges:
                 self.starts.append(clip(start, 0, size - 1))
                 self.stops.append(clip(stop, 0, size))
@@ -294,15 +295,15 @@ class Split(object):
 
     @basic_getitem
     def __getitem__(self, key):
-        return self.sequence[self.starts[key]:self.stops[key]]
+        return self.sequence[self.starts[key] : self.stops[key]]
 
     @basic_setitem
     def __setitem__(self, key, value):
         start, stop = self.starts[key], self.stops[key]
         if len(value) != stop - start:
             raise ValueError(
-                self.__class__.__name__ +
-                " only supports one-to-one assignment")
+                self.__class__.__name__ + " only supports one-to-one assignment"
+            )
 
         self.sequence[start:stop] = value
 
@@ -310,13 +311,17 @@ class Split(object):
 def split(sequence, edges):
     """Split a sequence into a succession of subsequences.
 
+    .. image:: _static/split.svg
+       :alt: split
+       :align: center
+
     Args:
         sequence (Sequence):
             Input sequence.
         edges (Sequence[int] or int or Sequence[Tuple[int, int]]):
             `edges` specifies how to split the sequence
 
-            - A 1D array that contains the indexes where the sequence
+            - A 1D arra    y that contains the indexes where the sequence
               should be cut, the beginning and the end of the sequence
               are implicit.
             - An int specifies how many cuts of equal size should be

@@ -1,6 +1,6 @@
 import logging
 import random
-from time import time, sleep
+from time import sleep, time
 
 import pytest
 
@@ -40,13 +40,13 @@ def test_cached():
     t2 = time()
 
     duration = t2 - t1
-    assert duration < .28
+    assert duration < 0.28
 
 
 @pytest.mark.timeout(5)
 def test_cached_timing():  # pragma: no cover
     def f(x):
-        sleep(.01)
+        sleep(0.01)
         return x
 
     cache_size = 3

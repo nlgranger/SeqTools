@@ -91,7 +91,7 @@ as well:
 [10, 2]
 
 Where it makes sense, transformed sequences also support index and slice based
-_assignment_ so as to make the objects truely behave like lists. For example
+*assignment* so as to make the objects truely behave like lists. For example
 with the :func:`gather` function:
 
 >>> data = [0, 1, 2, 3, 4, 5]
@@ -126,8 +126,8 @@ To finally compute all the values from a sequence, :func:`prefetch` provides
 a wrapper backed by multiple workers to compute the values more quickly.
 
 To see the library in practice, you can see how to :ref:`build, debug and run a
-transformation pipeline <Building and running a preprocessing pipeline>` or 
-write a multiprocessing capable :ref:`minibatch iterator <Fast minibatch sampling>`
+transformation pipeline <Building and running a preprocessing pipeline>` or
+how to write a multiprocessing capable :ref:`data loader <dataloader>`.
 
 The library is quite small for now, how about giving a quick glance at the
 :ref:`API Reference`?

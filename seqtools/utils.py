@@ -33,6 +33,7 @@ def basic_getitem(func):
         A `__getitem__` method that accepts negative indexing and
         slicing.
     """
+
     def getitem(self, key):
         if isinstance(key, slice):
             return SeqSlice(self, key)
@@ -56,7 +57,8 @@ def basic_getitem(func):
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
     return getitem
 
@@ -73,22 +75,22 @@ def basic_setitem(func):
         A `__setitem__` method that accepts negative indexing and
         slicing.
     """
+
     def setitem(self, key, value):
         if isinstance(key, slice):
             slice_view = SeqSlice(self, key)
 
             if len(slice_view) != len(value):
                 raise ValueError(
-                    self.__class__.__name__ +
-                    " only supports one-to-one assignment")
+                    self.__class__.__name__ + " only supports one-to-one assignment"
+                )
 
             for i, val in enumerate(value):
                 slice_view[i] = val
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
+                raise IndexError(self.__class__.__name__ + " index out of range")
 
             if key < 0:
                 key = len(self) + key
@@ -98,7 +100,8 @@ def basic_setitem(func):
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
     return setitem
 
@@ -151,7 +154,8 @@ class SeqSlice:
     def __init__(self, sequence, key):
         if isinstance(sequence, SeqSlice):
             key_start, key_stop, key_step = normalize_slice(
-                key.start, key.stop, key.step, len(sequence))
+                key.start, key.stop, key.step, len(sequence)
+            )
             numel = abs(key_stop - key_start) // abs(key_step)
             start = sequence.start + key_start * sequence.step
             step = key_step * sequence.step
@@ -160,7 +164,8 @@ class SeqSlice:
 
         else:
             start, stop, step = normalize_slice(
-                key.start, key.stop, key.step, len(sequence))
+                key.start, key.stop, key.step, len(sequence)
+            )
 
         self.sequence = sequence
         self.start = start

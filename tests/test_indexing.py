@@ -1,23 +1,21 @@
-from random import random, randint
+from random import randint, random
+
 import pytest
-from seqtools import arange, case, switch, gather, cycle, interleave, repeat, uniter
+
+from seqtools import arange, case, cycle, gather, interleave, repeat, switch, uniter
 
 
 def test_arange():
-    tests = [(10,),
-             (0,),
-             (0, -10, 1),
-             (10, -10, -3)]
-    slices = [slice(None, None, None),
-              slice(1, -1, 3),
-              slice(None, None, -3)]
+    tests = [(10,), (0,), (0, -10, 1), (10, -10, -3)]
+    slices = [slice(None, None, None), slice(1, -1, 3), slice(None, None, -3), 0]
 
     for t in tests:
         arr = list(range(*t))
         assert arr == list(arange(*t))
         assert arr == [x for x in arange(*t)]
         for s in slices:
-            assert arr[s] == list(arange(*t)[s])
+            if not isinstance(s, int) and len(arr) == 0:
+                assert arr[s] == list(arange(*t)[s])
 
 
 def test_reindex():
@@ -96,8 +94,7 @@ def test_switch():
     condition = [randint(0, 1) > 0 for _ in range(100)]
 
     res = switch(condition, values_true, values_false)
-    tgt = [t if c else f
-           for c, t, f in zip(condition, values_true, values_false)]
+    tgt = [t if c else f for c, t, f in zip(condition, values_true, values_false)]
 
     assert list(res) == tgt
 
@@ -110,11 +107,9 @@ def test_cycle():
     assert list(looped[150:105:-2]) == list(looped)[150:105:-2]
 
     looped = cycle(arr)
-    assert [looped[i] for i in range(999)] \
-        == [arr[i % 100] for i in range(999)]
+    assert [looped[i] for i in range(999)] == [arr[i % 100] for i in range(999)]
     it = iter(looped)
-    assert [next(it) for _ in range(999)] \
-        == [arr[i % 100] for i in range(999)]
+    assert [next(it) for _ in range(999)] == [arr[i % 100] for i in range(999)]
     sublooped = looped[:177:4]
     assert list(sublooped) == [arr[i % 100] for i in range(0, 177, 4)]
 
@@ -136,10 +131,10 @@ def test_cycle():
 
 def test_interleave():
     arr1 = [1, 2, 3, 4, 5]
-    arr2 = ['a', 'b', 'c']
-    arr3 = [.1, .2, .3, .4]
+    arr2 = ["a", "b", "c"]
+    arr3 = [0.1, 0.2, 0.3, 0.4]
     y = interleave(arr1, arr2, arr3)
-    expected = [1, 'a', .1, 2, 'b', .2, 3, 'c', .3, 4, .4, 5]
+    expected = [1, "a", 0.1, 2, "b", 0.2, 3, "c", 0.3, 4, 0.4, 5]
     assert list(y) == expected
     assert [y[i] for i in range(len(y))] == expected
 
@@ -147,8 +142,18 @@ def test_interleave():
     y[3] = -2
     y[-1] = -3
     assert arr1 == [1, -2, 3, 4, -3]
-    assert arr2 == [-1, 'b', 'c']
-    assert arr3 == [.1, .2, .3, .4]
+    assert arr2 == [-1, "b", "c"]
+    assert arr3 == [0.1, 0.2, 0.3, 0.4]
+
+
+def test_interleave_nolen():
+    arr1 = cycle([1, 2, 3, 4, 5])
+    arr2 = cycle(["a", "b", "c"])
+    arr3 = cycle([0.1, 0.2, 0.3, 0.4])
+    y = interleave(arr1, arr2, arr3)
+    expected = [1, "a", 0.1, 2, "b", 0.2, 3, "c", 0.3, 4, "a", 0.4, 5]
+    for a, b in zip(y, expected):
+        assert a == b
 
 
 def test_repeat():
