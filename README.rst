@@ -1,5 +1,5 @@
 .. image:: https://badge.fury.io/py/SeqTools.svg
-   :target: https://github.com/nlgranger/SeqTools
+   :target: https://pypi.org/project/SeqTools
    :alt: PyPi package
 .. image:: https://circleci.com/gh/nlgranger/SeqTools.svg?style=shield
    :target: https://circleci.com/gh/nlgranger/SeqTools
@@ -137,10 +137,9 @@ many optimization settings to optimize pipelined transformations. This library
 notably provides advanced caching mechanisms which are not the primary concern
 of SeqTool. SeqTool uses a simpler container-oriented interface with multiple
 utility functions in order to assist fast prototyping. On-demand evaluation is
-its default behaviour and applies at all layers of a transformation pipeline. In
-particular, parallel evaluation can be inserted in the middle of the
-transformation pipeline and won't block the execution to wait for the
-computation of all elements from the dataset.
+its default behaviour and applies at all layers of a transformation pipeline. 
+Eager evaluation of elements in SeqTools does not break the list-like interface
+and can be used in the middle of a transformation pipeline.
 
 SeqTools is conceived to connect nicely to the data loading pipeline of Machine
 Learning libraries such as PyTorch's `torch.utils.data

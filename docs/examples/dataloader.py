@@ -62,7 +62,7 @@ class DataLoader:
             drop_last=False,
             worker_init_fn=None,
             prefetch_factor=2,
-            shm_size=None):
+            shm_size=0):
         """Re-implementation of pytorch Dataloader using seqtools.
 
         Notable differences:
@@ -109,7 +109,7 @@ class DataLoader:
             shuffle_indices = list(self.sampler)
             out = seqtools.gather(self.dataset, shuffle_indices)
         elif self.shuffle:
-            shuffle_indices = np.random.permutation(len(self.dataset))
+            shuffle_indices = torch.randperm(len(self.dataset))
             out = seqtools.gather(self.dataset, shuffle_indices)
         else:
             out = self.dataset

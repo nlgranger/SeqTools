@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from copyreg import dispatch_table
 import functools
 import itertools
 import multiprocessing
@@ -50,7 +49,7 @@ class ProcessBacked(AsyncWorker):
             raise ValueError("at least one worker required")
         if buffer_size < num_workers:
             raise ValueError("at least one buffer slot required by worker")
-        if shm_size > 0 and sys.version_info < (3, 8):
+        if shm_size > 0 and tuple(sys.version_info) < (3, 8):
             raise NotImplementedError("shm support requires python>=3.8")
         if shm_size > 0 and platform.python_implementation() == "PyPy":
             raise NotImplementedError("shm support broken on PyPy")
@@ -142,7 +141,7 @@ class ProcessBacked(AsyncWorker):
         if len(buffer_regions) > 0:  # shm was used to send payload
             # add refcount to shm to retrieve slot once free
             rc_shm = memoryview(RefCountedBuffer(
-                self.shm, lambda _: self.free_shm_slots.add(shm_slot_start)))
+                self.shm, functools.partial(self.add_free_shm_slot, shm_slot_start)))
             # delimit off-band pickle buffers
             buffers = [rc_shm[start:stop] for start, stop in buffer_regions]
             # deserialize payload
@@ -154,6 +153,9 @@ class ProcessBacked(AsyncWorker):
             value = pkl.loads(payload)
 
         return item, success, value
+
+    def add_free_shm_slot(self, start, *kargs):
+        self.free_shm_slots.add(start)
 
     @staticmethod
     def worker(seq, job_queue, shm, shm_slot_size, result_pipe, init_fn, index):

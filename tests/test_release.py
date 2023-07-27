@@ -30,11 +30,7 @@ def candidate_for_release():
     return True
 
 
-if not candidate_for_release():
-    pytest.skip("skipping pre-release tests (not a release)",
-                allow_module_level=True)
-
-
+@pytest.mark.skipif(not candidate_for_release(), reason="not a release")
 def test_version():
     version = pkg_resources.require("seqtools")[0].version
 

@@ -140,8 +140,9 @@ class BatchView(object):
 
     @basic_getitem
     def __getitem__(self, key):
-        result = self.sequence[
-            key * self.batch_size:(key + 1) * self.batch_size]
+        start = key * self.batch_size
+        stop = min((key + 1) * self.batch_size, len(self.sequence))
+        result = [self.sequence[i] for i in range(start, stop)]
 
         if self.pad is not None and key == (len(self) - 1):
             pad_size = self.batch_size - len(self.sequence) % self.batch_size
