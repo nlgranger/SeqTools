@@ -1,6 +1,8 @@
-from random import random, randint
-from seqtools import collate, concatenate, batch, unbatch, split
+from random import randint, random
+
 import pytest
+
+from seqtools import batch, collate, concatenate, split, unbatch
 
 
 def test_collate():
@@ -31,7 +33,7 @@ def test_concatenate():
     arrs2 = [list(range(i, i + 25)) for i in range(0, 101, 25)]
     concatenated = concatenate(arrs1)
     for j, i in enumerate(range(0, 101, 25)):
-        concatenated[i:i+10] = range(-i, -i - 10, -1)
+        concatenated[i : i + 10] = range(-i, -i - 10, -1)
         arrs2[j][:10] = range(-i, -i - 10, -1)
     assert arrs1 == arrs2
 
@@ -47,16 +49,16 @@ def test_batching():
     assert unchunked == [x for b in expected for x in b]
 
     chunked = list(batch(arr, 5, False))
-    expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
-        + [[135, 136]]
+    expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] + [[135, 136]]
     assert chunked == expected
 
     unchunked = [i for i in unbatch(chunked, 5, len(arr) % 5)]
     assert unchunked == [x for b in expected for x in b]
 
     chunked = list(batch(arr, 5, pad=0, collate_fn=list))
-    expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] \
-        + [[135, 136, 0, 0, 0]]
+    expected = [[i + k for k in range(5)] for i in range(0, 135, 5)] + [
+        [135, 136, 0, 0, 0]
+    ]
     assert chunked == expected
 
     chunked = batch(arr, 5, pad=0, collate_fn=list)

@@ -10,7 +10,8 @@ def test_slice():
         slice(0, 0, 1),
         slice(0, 10, -1),
         slice(10, 0, -1),
-        slice(250, -125, -1)]
+        slice(250, -125, -1),
+    ]
 
     for k in keys:
         v = SeqSlice(arr, k)

@@ -1,7 +1,7 @@
-from array import array
 import bisect
-from collections import deque
 import itertools
+from array import array
+from collections import deque
 from numbers import Integral
 from typing import Sequence
 
@@ -36,7 +36,8 @@ class Arange:
     def __getitem__(self, key):
         if isinstance(key, slice):
             start, stop, step = normalize_slice(
-                key.start, key.stop, key.step, len(self))
+                key.start, key.stop, key.step, len(self)
+            )
             numel = abs(stop - start) // abs(step)
 
             start = self.start + self.step * start
@@ -48,7 +49,8 @@ class Arange:
         elif not isinstance(key, Integral):
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
         return self.start + self.step * key
 
@@ -80,8 +82,7 @@ class Gathering:
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
+                raise IndexError(self.__class__.__name__ + " index out of range")
 
             if key < 0:
                 key = len(self) + key
@@ -91,23 +92,24 @@ class Gathering:
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             indexes = self.indexes[key]
 
             if len(indexes) != len(value):
-                raise ValueError(self.__class__.__name__ + " only support "
-                                 "one-to-one assignment")
+                raise ValueError(
+                    self.__class__.__name__ + " only support " "one-to-one assignment"
+                )
 
             for i, val in zip(indexes, value):
                 self.sequence[i] = val
 
         elif isint(key):
             if key < -len(self) or key >= len(self):
-                raise IndexError(
-                    self.__class__.__name__ + " index out of range")
+                raise IndexError(self.__class__.__name__ + " index out of range")
 
             if key < 0:
                 key = len(self) + key
@@ -117,7 +119,8 @@ class Gathering:
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
 
 def gather(sequence, indexes):
@@ -188,7 +191,8 @@ class InfiniteCycle:
             if start < 0 or stop is None or stop < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             offset = start - start % len(self.sequence)
             start -= offset
@@ -199,14 +203,16 @@ class InfiniteCycle:
             if key < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             return self.sequence[key % len(self.sequence)]
 
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
 
 def cycle(sequence, limit=None):
@@ -240,8 +246,7 @@ class Interleaving(object):
     def __init__(self, sequences):
         offsets_in = [0]  # end of sequences in input indexing
         offsets_out = [0]  # end of sequences in output indexing
-        whose_offset = sorted(range(len(sequences)),
-                              key=lambda k: len(sequences[k]))
+        whose_offset = sorted(range(len(sequences)), key=lambda k: len(sequences[k]))
 
         for i, n_seq_left in zip(whose_offset, range(len(sequences), 0, -1)):
             n_new_out_items = (len(sequences[i]) - offsets_in[-1]) * n_seq_left
@@ -250,10 +255,9 @@ class Interleaving(object):
 
         self.sequences = sequences
         self.n_seqs = len(sequences)
-        self.offsets_in = array('i', offsets_in)
-        self.offsets_out = array('i', offsets_out)
-        self.remaining_seqs = [sorted(whose_offset[i:])
-                               for i in range(len(sequences))]
+        self.offsets_in = array("i", offsets_in)
+        self.offsets_out = array("i", offsets_out)
+        self.remaining_seqs = [sorted(whose_offset[i:]) for i in range(len(sequences))]
 
     def __len__(self):
         return sum(map(len, self.sequences))
@@ -361,7 +365,7 @@ class InfiniteRepetition(object):
         return itertools.repeat(self.value)
 
     def __len__(self):
-        return 0
+        raise TypeError(self.__class__.__name__ + " has no len")
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -372,7 +376,8 @@ class InfiniteRepetition(object):
             if start < 0 or stop is None or stop < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             if step == 0:
                 raise ValueError("slice step cannot be 0")
@@ -391,14 +396,16 @@ class InfiniteRepetition(object):
             if key < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             return self.value
 
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
@@ -409,7 +416,8 @@ class InfiniteRepetition(object):
             if start < 0 or stop is None or stop < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             if step == 0:
                 raise ValueError("slice step cannot be 0")
@@ -421,14 +429,16 @@ class InfiniteRepetition(object):
             if key < 0:
                 raise IndexError(
                     "Cannot use indices relative to length on "
-                    + self.__class__.__name__)
+                    + self.__class__.__name__
+                )
 
             self.value = value
 
         else:
             raise TypeError(
                 self.__class__.__name__ + " indices must be integers or "
-                "slices, not " + key.__class__.__name__)
+                "slices, not " + key.__class__.__name__
+            )
 
 
 def repeat(value, times=None):
@@ -518,7 +528,7 @@ class UnIter:
         if self.size is not None:
             return self.size
         else:
-            raise TypeError('Unknown iterator len')
+            raise TypeError("Unknown iterator len")
 
     def __getitem__(self, item):
         if item < 0 and self.size is not None:
@@ -526,7 +536,8 @@ class UnIter:
         if item < 0 and self.size is None:
             raise IndexError(
                 f"cannot use negative indexing on {self.__class__.__name__} "
-                "with unknown size.")
+                "with unknown size."
+            )
         if item < 0 or (self.size is not None and item >= self.size):
             raise IndexError(self.__class__.__name__ + " index out of range")
 
@@ -557,7 +568,7 @@ class ParallelUniter:
         if self.size is not None:
             return self.size
         else:
-            raise TypeError('Unknown iterator len')
+            raise TypeError("Unknown iterator len")
 
     def __getitem__(self, item):
         if item < 0 and self.size is not None:
@@ -565,7 +576,8 @@ class ParallelUniter:
         if item < 0 and self.size is None:
             raise IndexError(
                 f"cannot use negative indexing on {self.__class__.__name__} "
-                "with unknown size.")
+                "with unknown size."
+            )
         if item < 0 or (self.size is not None and item >= self.size):
             raise IndexError(self.__class__.__name__ + " index out of range")
 

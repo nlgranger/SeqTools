@@ -8,7 +8,6 @@ import os
 import shutil
 import sys
 import tempfile
-
 from importlib import import_module, reload
 
 
@@ -25,6 +24,7 @@ class SerializableFunc:
         containing the function is saved, regenerated and reloaded.
         Use with care.
     """
+
     def __init__(self, func):
         if isinstance(func, SerializableFunc):
             self.name = func.name
@@ -51,7 +51,7 @@ class SerializableFunc:
 
         tmpdir = tempfile.mkdtemp()
         try:
-            with open(os.path.join(tmpdir, "module.py"), 'w') as dump_file:
+            with open(os.path.join(tmpdir, "module.py"), "w") as dump_file:
                 dump_file.write(self.source)
 
             sys.path.insert(0, tmpdir)

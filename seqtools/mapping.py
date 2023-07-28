@@ -24,11 +24,12 @@ class Mapping(object):
                 i += 1
 
         except Exception as error:
-            if seterr() == 'passthrough' or isinstance(error, EvaluationError):
+            if seterr() == "passthrough" or isinstance(error, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
-                    i, self.__class__.__name__, self.stack)
+                    i, self.__class__.__name__, self.stack
+                )
                 raise EvaluationError(msg) from error
 
     @basic_getitem
@@ -37,11 +38,12 @@ class Mapping(object):
             return self.f(*(l[item] for l in self.sequences))
 
         except Exception as cause:
-            if seterr() == 'passthrough' or isinstance(cause, EvaluationError):
+            if seterr() == "passthrough" or isinstance(cause, EvaluationError):
                 raise
             else:
                 msg = "Failed to evaluate item {} in {} created at:\n{}".format(
-                    item, self.__class__.__name__, self.stack)
+                    item, self.__class__.__name__, self.stack
+                )
                 raise EvaluationError(msg) from cause
 
 

@@ -3,9 +3,9 @@ import os
 import platform
 import random
 import signal
-import sys
-import tempfile
 import string
+import tempfile
+import threading
 from multiprocessing import Process
 from time import sleep, time
 
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from seqtools import smap, prefetch, EvaluationError, seterr
+from seqtools import EvaluationError, prefetch, seterr, smap, repeat
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -22,34 +22,41 @@ seed = int(random.random() * 100000)
 random.seed(seed)
 
 prefetch_kwargs_set = [
-    {'method': "thread"},
-    {'method': "process"}]
-if sys.version_info >= (3, 8):
-    prefetch_kwargs_set.append(
-        {'method': "process", 'shm_size': 16 * 1024 ** 2})
+    {"method": "thread"},
+    {"method": "process"},
+    {"method": "process", "shm_size": 16 * 1024**2},
+]
 
 
-def build_random_object(limit=1.):
+def build_random_object(limit=1.0):
     x = min(random.random(), limit - 1e-6)
 
     if x < 0.2:
         return random.randint(-100, 100)
     elif x < 0.4:
-        return ''.join(random.choice(string.ascii_letters)
-                       for _ in range(random.randint(0, 100)))
+        return "".join(
+            random.choice(string.ascii_letters) for _ in range(random.randint(0, 100))
+        )
     elif x < 0.6:
         return random.random()
     elif x < 0.65:
-        return {build_random_object(0.4): build_random_object(limit - 0.1)
-                for _ in range(random.randint(0, 15))}
+        return {
+            build_random_object(0.4): build_random_object(limit - 0.1)
+            for _ in range(random.randint(0, 15))
+        }
     elif x < 0.70:
-        return tuple(build_random_object(limit - 0.1) for _ in range(random.randint(0, 15)))
+        return tuple(
+            build_random_object(limit - 0.1) for _ in range(random.randint(0, 15))
+        )
     elif x < 0.75:
         return [build_random_object(limit - 0.1) for _ in range(random.randint(0, 15))]
     elif x < 0.80:
-        dtype = random.choice(['b', 'i1', 'i2', 'u8', 'm8'])
-        return np.asarray(np.random.rand(
-            *[random.randint(0, 10) for _ in range(random.randint(0, 3))])).astype(dtype)
+        dtype = random.choice(["b", "i1", "i2", "u8", "m8"])
+        return np.asarray(
+            np.random.rand(
+                *[random.randint(0, 10) for _ in range(random.randint(0, 3))]
+            )
+        ).astype(dtype)
     else:
         return None
 
@@ -83,9 +90,46 @@ def compare_random_objects(a, b):
 @pytest.mark.parametrize("prefetch_kwargs", prefetch_kwargs_set)
 def test_prefetch_random_objects(prefetch_kwargs):
     seq = [build_random_object() for _ in range(1000)]
-    y = prefetch(seq, 2, **prefetch_kwargs)
+    y = prefetch(seq, -1, **prefetch_kwargs)
+
+    assert len(seq) == len(y)
+
     for x, y in zip(seq, y):
         compare_random_objects(x, y)
+
+
+@pytest.mark.parametrize("prefetch_kwargs", prefetch_kwargs_set)
+def test_prefetch_infinite(prefetch_kwargs):
+    seq = repeat(1)
+    y = prefetch(seq, 1, **prefetch_kwargs)
+
+    for i, x in enumerate(y):
+        assert x == 1
+        if i == 100:
+            break
+
+
+tls = None
+def set_seed(*kargs):
+    global tls
+    tls = threading.local()
+    tls.random = random.Random(42)
+
+
+def randint(*kargs):
+    return tls.random.randint(0, 10)
+
+
+@pytest.mark.parametrize("prefetch_kwargs", prefetch_kwargs_set)
+def test_prefetch_start_hook(prefetch_kwargs):
+    seq = smap(randint, [None] * 1000)
+
+    y = list(prefetch(seq, 1, **prefetch_kwargs, start_hook=set_seed))
+
+    set_seed()
+    z = [randint() for _ in range(1000)]
+
+    compare_random_objects(y, z)
 
 
 @pytest.mark.parametrize("prefetch_kwargs", prefetch_kwargs_set)
@@ -100,7 +144,8 @@ def test_prefetch_timings(prefetch_kwargs):
     arr = np.random.rand(100, 10)
     y = smap(f1, arr)
     y = prefetch(
-        y, nworkers=4, max_buffered=10, start_hook=start_hook, **prefetch_kwargs)
+        y, nworkers=4, max_buffered=10, start_hook=start_hook, **prefetch_kwargs
+    )
     y = [y_.copy() for y_ in y]  # copy needed to release buffers when shm_size>0
     assert_array_equal(np.stack(y), arr)
 
@@ -134,7 +179,7 @@ def test_prefetch_timings(prefetch_kwargs):
 @pytest.mark.timeout(15)
 def test_prefetch_throughput(prefetch_kwargs):  # pragma: no cover
     def f1(x):
-        sleep(.02 + 0.01 * (random.random() - .5))
+        sleep(0.02 + 0.01 * (random.random() - 0.5))
         return x
 
     arr = np.random.rand(420, 10)
@@ -174,7 +219,9 @@ def test_prefetch_errors(error_mode, prefetch_kwargs, picklable_err):
     y = prefetch(arr2, nworkers=2, max_buffered=4, **prefetch_kwargs)
 
     seterr(error_mode)
-    if (prefetch_kwargs['method'] != "thread" and not picklable_err) or error_mode == "wrap":
+    if (
+        prefetch_kwargs["method"] != "thread" and not picklable_err
+    ) or error_mode == "wrap":
         error_t = EvaluationError
     else:
         error_t = ValueError if picklable_err else CustomError
@@ -186,7 +233,8 @@ def test_prefetch_errors(error_mode, prefetch_kwargs, picklable_err):
     except Exception as e:
         assert type(e) == error_t
 
-    if (prefetch_kwargs['method'] == "process") and error_mode == "passthrough":
+    if (prefetch_kwargs["method"] == "process") and error_mode == "passthrough":
+
         class CustomObject:  # unpicklable object
             pass
 
@@ -197,7 +245,7 @@ def test_prefetch_errors(error_mode, prefetch_kwargs, picklable_err):
 
 
 def check_pid(pid):
-    """ Check For the existence of a unix pid. """
+    """Check For the existence of a unix pid."""
     try:
         os.kill(pid, 0)
     except OSError:
@@ -206,63 +254,75 @@ def check_pid(pid):
         return True
 
 
-@pytest.mark.parametrize("method", ["process"])
 @pytest.mark.timeout(10)
-def test_prefetch_crash(method):
+def test_worker_crash():
     if platform.python_implementation() == "PyPy":
         pytest.skip("broken with pypy")
 
     # worker dies
     with tempfile.TemporaryDirectory() as d:
+
         def init_fn(worker_id):
-            signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
-            with open('{}/{}'.format(d, os.getpid()), "w"):
+            with open("{}/{}".format(d, os.getpid()), "w"):
                 pass
 
         def f1(x):
-            sleep(.02 + 0.01 * (random.random() - .5))
+            sleep(0.02 + 0.01 * (random.random() - 0.5))
             return x
 
         arr = np.random.rand(1000, 10)
         y = smap(f1, arr)
-        y = prefetch(y, method=method, max_buffered=40,
-                     nworkers=4, start_hook=init_fn)
+        y = prefetch(
+            y, method="process", max_buffered=40, nworkers=4, start_hook=init_fn
+        )
 
         sleep(0.1)
 
         while len(os.listdir(d)) == 0:
             sleep(0.05)
 
-        os.kill(int(os.listdir(d)[0]), signal.SIGUSR1)
+        os.kill(int(os.listdir(d)[0]), signal.SIGKILL)
 
         with pytest.raises(RuntimeError):
             for i in range(0, 1000):
                 a = y[i]
 
-    # parent dies
+
+@pytest.mark.timeout(10)
+def test_orphan_workers_die():
+    if platform.python_implementation() == "PyPy":
+        pytest.skip("broken with pypy")
+
     with tempfile.TemporaryDirectory() as d:
+
         def init_fn(worker_id):
-            signal.signal(signal.SIGUSR1, lambda *_: sys.exit(-1))
-            with open('{}/{}'.format(d, os.getpid()), "w"):
+            with open("{}/{}".format(d, os.getpid()), "w"):
                 pass
+
+        def f1(x):
+            return x
 
         def target():
             arr = np.random.rand(1000, 10)
             y = smap(f1, arr)
-            y = prefetch(y, method=method, max_buffered=40,
-                         nworkers=4, start_hook=init_fn)
+            y = prefetch(
+                y, method="process", max_buffered=4, nworkers=4, start_hook=init_fn
+            )
 
             for i in range(0, 1000):
                 a = y[i]
 
         p = Process(target=target)
+        # h = signal.signal(signal.SIGCHLD, signal.SIG_IGN)
         p.start()
+        # signal.signal(signal.SIGCHLD, h)
 
-        while len(os.listdir(d)) == 0:
+        while len(os.listdir(d)) < 4:  # wait for workers to start
             sleep(0.05)
 
-        os.kill(p.pid, signal.SIGUSR1)
-        sleep(2)  # wait for workers to time out
+        os.kill(p.pid, signal.SIGKILL)  # parent process crashes
+        
+        sleep(3)  # wait for workers to time out
 
         for pid in map(int, os.listdir(d)):
-            assert not check_pid(pid)
+            assert not check_pid(pid)  # ensure workers have exited

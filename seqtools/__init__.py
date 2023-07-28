@@ -17,21 +17,44 @@ prefetch routine which hides away the difficulties of concurrent
 processing into a simple sequence wrapper.
 """
 
-from .evaluation import prefetch
-from .errors import EvaluationError, seterr
+from . import instrument
 from .buffering import add_cache
-from .indexing import arange, case, gather, take, cycle, interleave, \
-    repeat, switch, uniter
+from .errors import EvaluationError, seterr
+from .evaluation import prefetch
+from .indexing import (
+    arange,
+    case,
+    cycle,
+    gather,
+    interleave,
+    repeat,
+    switch,
+    take,
+    uniter,
+)
 from .mapping import smap, starmap
 from .serialization import SerializableFunc
-from .shape import collate, concatenate, batch, unbatch, split
-from . import instrument
+from .shape import batch, collate, concatenate, split, unbatch
 
 __all__ = [
-    'prefetch',
-    'EvaluationError', 'seterr',
-    'add_cache',
-    'arange', 'case', 'gather', 'take', 'cycle', 'interleave',
-    'repeat', 'switch', 'uniter',
-    'smap', 'starmap',
-    'collate', 'concatenate', 'batch', 'unbatch', 'split']
+    "prefetch",
+    "EvaluationError",
+    "seterr",
+    "add_cache",
+    "arange",
+    "case",
+    "gather",
+    "take",
+    "cycle",
+    "interleave",
+    "repeat",
+    "switch",
+    "uniter",
+    "smap",
+    "starmap",
+    "collate",
+    "concatenate",
+    "batch",
+    "unbatch",
+    "split",
+]

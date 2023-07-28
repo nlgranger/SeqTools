@@ -4,7 +4,7 @@ import array
 import bisect
 import itertools
 
-from .utils import isint, clip, basic_getitem, basic_setitem, get_logger
+from .utils import basic_getitem, basic_setitem, clip, get_logger, isint
 
 
 class Collation:
@@ -65,8 +65,7 @@ class Concatenation(object):
             else:
                 self.sequences.append(seq)
 
-        self.offsets = array.array(
-            'L', [0] + [len(seq) for seq in self.sequences])
+        self.offsets = array.array("L", [0] + [len(seq) for seq in self.sequences])
         for i in range(1, len(self.sequences) + 1):
             self.offsets[i] += self.offsets[i - 1]
 
@@ -112,8 +111,9 @@ def concatenate(sequences):
 
 
 class BatchView(object):
-    def __init__(self, sequence, batch_size,
-                 drop_last=False, pad=None, collate_fn=None):
+    def __init__(
+        self, sequence, batch_size, drop_last=False, pad=None, collate_fn=None
+    ):
         self.sequence = sequence
         self.batch_size = batch_size
         self.drop_last = drop_last
@@ -158,16 +158,20 @@ class BatchView(object):
         start = key * self.batch_size
         if key == len(self.sequence) // self.batch_size:
             stop = start + len(self.sequence) % self.batch_size
-            expected_value_size = len(self.sequence) % self.batch_size \
-                if self.pad is not None else self.batch_size
+            expected_value_size = (
+                len(self.sequence) % self.batch_size
+                if self.pad is not None
+                else self.batch_size
+            )
 
         else:
             stop = (key + 1) * self.batch_size
             expected_value_size = self.batch_size
 
         if len(value) != expected_value_size:
-            raise ValueError(self.__class__.__name__ + " only support "
-                             "one-to-one assignment")
+            raise ValueError(
+                self.__class__.__name__ + " only support " "one-to-one assignment"
+            )
 
         for i, val in zip(range(start, stop), value):
             self.sequence[i] = val
@@ -221,8 +225,7 @@ class Unbatching(object):
         self.last_batch_size = last_batch_size or batch_size
 
     def __len__(self):
-        return max(0, len(self.sequence) - 1) * self.batch_size \
-            + self.last_batch_size
+        return max(0, len(self.sequence) - 1) * self.batch_size + self.last_batch_size
 
     def __iter__(self):
         return itertools.chain.from_iterable(self.sequence)
@@ -261,12 +264,12 @@ class Split(object):
             if size / (edges + 1) % 1 != 0:
                 raise ValueError("edges must divide the size of the sequence")
             step = size // (edges + 1)
-            self.starts = array.array('L', range(0, size, step))
-            self.stops = array.array('L', range(step, size + 1, step))
+            self.starts = array.array("L", range(0, size, step))
+            self.stops = array.array("L", range(step, size + 1, step))
 
         elif isint(edges[0]):
-            self.starts = array.array('L')
-            self.stops = array.array('L')
+            self.starts = array.array("L")
+            self.stops = array.array("L")
             for edge in edges:
                 start = self.stops[-1] if len(self.stops) > 0 else 0
                 stop = edge
@@ -278,8 +281,8 @@ class Split(object):
             self.stops.append(size)
 
         else:
-            self.starts = array.array('L')
-            self.stops = array.array('L')
+            self.starts = array.array("L")
+            self.stops = array.array("L")
             for start, stop in edges:
                 self.starts.append(clip(start, 0, size - 1))
                 self.stops.append(clip(stop, 0, size))
@@ -295,15 +298,15 @@ class Split(object):
 
     @basic_getitem
     def __getitem__(self, key):
-        return self.sequence[self.starts[key]:self.stops[key]]
+        return self.sequence[self.starts[key] : self.stops[key]]
 
     @basic_setitem
     def __setitem__(self, key, value):
         start, stop = self.starts[key], self.stops[key]
         if len(value) != stop - start:
             raise ValueError(
-                self.__class__.__name__ +
-                " only supports one-to-one assignment")
+                self.__class__.__name__ + " only supports one-to-one assignment"
+            )
 
         self.sequence[start:stop] = value
 

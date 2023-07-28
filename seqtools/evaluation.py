@@ -1,8 +1,7 @@
-from abc import ABC, abstractmethod
 import functools
+import io
 import itertools
 import multiprocessing
-from multiprocessing import sharedctypes
 import os
 import pickle as pkl
 import platform
@@ -12,14 +11,14 @@ import sys
 import threading
 import time
 import weakref
-import io
+from abc import ABC, abstractmethod
+from multiprocessing import sharedctypes
 
 from tblib import pickling_support
 
 from .C.refcountedbuffer import RefCountedBuffer
 from .errors import EvaluationError, format_stack, seterr
 from .utils import get_logger
-
 
 pickling_support.install()
 
@@ -28,6 +27,7 @@ mp_ctx = multiprocessing.get_context()
 
 
 # Asynchronous item fetching backends -----------------------------------------
+
 
 class AsyncWorker(ABC):
     @abstractmethod
@@ -41,8 +41,8 @@ class AsyncWorker(ABC):
 
 class ProcessBacked(AsyncWorker):
     """Process-based workers with shared memory for zero-copy transfer."""
-    def __init__(self, seq, num_workers=0, buffer_size=10, init_fn=None,
-                 shm_size=0):
+
+    def __init__(self, seq, num_workers=0, buffer_size=10, init_fn=None, shm_size=0):
         if num_workers <= 0:
             num_workers = multiprocessing.cpu_count() - num_workers
         if num_workers <= 0:
@@ -55,7 +55,7 @@ class ProcessBacked(AsyncWorker):
             raise NotImplementedError("shm support broken on PyPy")
 
         # allocate shared memory for zero-copy transfers from workers
-        self.shm = sharedctypes.RawArray('B', shm_size)
+        self.shm = sharedctypes.RawArray("B", shm_size)
         self.shm_slot_size = shm_size // buffer_size
         # shm slot are identified by their byte offset
         if shm_size > 0:
@@ -73,8 +73,17 @@ class ProcessBacked(AsyncWorker):
 
             worker = mp_ctx.Process(
                 target=self.__class__.worker,
-                args=(seq, self.job_queue, self.shm, self.shm_slot_size, tx, init_fn, i),
-                daemon=True)
+                args=(
+                    seq,
+                    self.job_queue,
+                    self.shm,
+                    self.shm_slot_size,
+                    tx,
+                    init_fn,
+                    i,
+                ),
+                daemon=True,
+            )
             old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
             worker.start()
             signal.signal(signal.SIGINT, old_sig_hdl)
@@ -85,14 +94,17 @@ class ProcessBacked(AsyncWorker):
 
         # monitor workers
         self.worker_died = threading.Event()
-        worker_monitor = threading.Thread(target=self.monitor_workers,
-                                          args=(self.workers, self.worker_died),
-                                          daemon=True)
+        worker_monitor = threading.Thread(
+            target=self.monitor_workers,
+            args=(self.workers, self.worker_died),
+            daemon=True,
+        )
         worker_monitor.start()
 
         # set cleanup hooks
-        weakref.finalize(self, ProcessBacked.cleanup,
-                         self.job_queue, self.workers, worker_monitor)
+        weakref.finalize(
+            self, ProcessBacked.cleanup, self.job_queue, self.workers, worker_monitor
+        )
 
     @staticmethod
     def cleanup(job_queue, workers, monitor):
@@ -117,8 +129,10 @@ class ProcessBacked(AsyncWorker):
         try:
             shm_slot_start = self.free_shm_slots.pop()
         except KeyError:
-            logger.warning("no free shm slots available, "
-                           "make sure prefetch results are deleted")
+            if self.shm_slot_size > 0:
+                logger.warning(
+                    "no free shm slots available, make sure prefetch results are deleted"
+                )
             shm_slot_start = None
 
         self.job_queue.put((item, shm_slot_start))
@@ -140,8 +154,11 @@ class ProcessBacked(AsyncWorker):
 
         if len(buffer_regions) > 0:  # shm was used to send payload
             # add refcount to shm to retrieve slot once free
-            rc_shm = memoryview(RefCountedBuffer(
-                self.shm, functools.partial(self.add_free_shm_slot, shm_slot_start)))
+            rc_shm = memoryview(
+                RefCountedBuffer(
+                    self.shm, functools.partial(self.add_free_shm_slot, shm_slot_start)
+                )
+            )
             # delimit off-band pickle buffers
             buffers = [rc_shm[start:stop] for start, stop in buffer_regions]
             # deserialize payload
@@ -165,9 +182,9 @@ class ProcessBacked(AsyncWorker):
         if init_fn is not None:
             init_fn(index)
 
-        seterr('passthrough')
+        seterr("passthrough")
 
-        shm = memoryview(shm).cast('B')
+        shm = memoryview(shm).cast("B")
         buffers_limits = []
         shm_offset = -1
         shm_slot_stop = -1
@@ -178,10 +195,10 @@ class ProcessBacked(AsyncWorker):
             data = buffer.raw()
 
             if shm_offset + data.nbytes > shm_slot_stop:
-                logger.warning('shared memory is too small to store buffers')
+                logger.warning("shared memory is too small to store buffers")
                 return True
 
-            shm[shm_offset:shm_offset + data.nbytes] = data
+            shm[shm_offset : shm_offset + data.nbytes] = data
             buffers_limits.append((shm_offset, shm_offset + data.nbytes))
             shm_offset += data.nbytes
 
@@ -219,21 +236,25 @@ class ProcessBacked(AsyncWorker):
                     buffers_limits.clear()
                     shm_offset = shm_slot_start
                     shm_slot_stop = shm_slot_start + shm_slot_size
-                    payload = pkl.dumps(value, protocol=-1,
-                                        buffer_callback=buffer_callback)
+                    payload = pkl.dumps(
+                        value, protocol=-1, buffer_callback=buffer_callback
+                    )
 
             except Exception as e:  # gracefully recover failed serialization
                 if success:
                     success = False
-                    msg = ("failed to send item {} to parent process, ".format(idx)
-                           + "is it picklable? Error message was:\n{}".format(e))
+                    msg = "failed to send item {} to parent process, ".format(
+                        idx
+                    ) + "is it picklable? Error message was:\n{}".format(e)
                     payload = pkl.dumps(ValueError(msg))
                 else:  # serialize error message because error can't be pickled
                     payload = pkl.dumps(str(value))
 
             # send it
             try:
-                result_pipe.send((idx, success, shm_slot_start, buffers_limits, payload))
+                result_pipe.send(
+                    (idx, success, shm_slot_start, buffers_limits, payload)
+                )
 
             except BrokenPipeError:  # unrecoverable error
                 # parent died unexpectedly
@@ -247,6 +268,7 @@ class ProcessBacked(AsyncWorker):
 
 class ThreadBackend(AsyncWorker):
     """Thread-based workers."""
+
     def __init__(self, seq, num_workers=0, init_fn=None):
         if num_workers <= 0:
             num_workers = multiprocessing.cpu_count() - num_workers
@@ -261,7 +283,8 @@ class ThreadBackend(AsyncWorker):
             process = threading.Thread(
                 target=self.__class__.worker,
                 args=(seq, self.job_queue, self.done_queue, init_fn),
-                daemon=True)
+                daemon=True,
+            )
             process.start()
             self.workers.append(process)
 
@@ -285,7 +308,7 @@ class ThreadBackend(AsyncWorker):
         if init_fn is not None:
             init_fn()
 
-        seterr('passthrough')
+        seterr("passthrough")
 
         while True:
             # acquire job
@@ -308,6 +331,7 @@ class ThreadBackend(AsyncWorker):
 
 
 # ---------------------------------------------------------------------------------------
+
 
 def reraise_err(item, error, stack_desc=None):
     """(re)Raise an evaluation error with contextual debug info."""
@@ -381,8 +405,9 @@ class Prefetch:
             reraise_err(item, value, self.creation_stack)
 
 
-def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
-             shm_size=0):
+def prefetch(
+    seq, nworkers=0, method="thread", max_buffered=10, start_hook=None, shm_size=0
+):
     """Wrap a sequence to prefetch values ahead using background workers.
 
     Every time an element of this container is accessed, the following
@@ -426,19 +451,22 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
         Sequence: The wrapped sequence.
     """
     if max_buffered <= 0:
-        raise ValueError('max_buffered must be greater than 0')
+        raise ValueError("max_buffered must be greater than 0")
 
     if nworkers == 0:
         return seq
     elif method == "thread":
-        backend = ThreadBackend(
-            seq, num_workers=nworkers, init_fn=start_hook)
+        backend = ThreadBackend(seq, num_workers=nworkers, init_fn=start_hook)
     elif method == "process":
         if max_buffered < 4:
             raise ValueError("process backend requires at least 4 buffer slots")
         backend = ProcessBacked(
-            seq, num_workers=nworkers, buffer_size=max_buffered, init_fn=start_hook,
-            shm_size=shm_size)
+            seq,
+            num_workers=nworkers,
+            buffer_size=max_buffered,
+            init_fn=start_hook,
+            shm_size=shm_size,
+        )
         # limit strain on GC to recycle buffer slots by limiting queued items
         max_buffered = max_buffered - 2
     else:
@@ -448,6 +476,4 @@ def prefetch(seq, nworkers=0, method="thread", max_buffered=10, start_hook=None,
         size = len(seq)
     except TypeError:
         size = None
-    return Prefetch(size, backend,
-                    buffer_size=max_buffered,
-                    init_stack=format_stack())
+    return Prefetch(size, backend, buffer_size=max_buffered, init_stack=format_stack())
