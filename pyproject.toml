@@ -4,13 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "SeqTools"
-authors = [
-    { name = "Nicolas Granger", email = "nicolas.granger.m@gmail.com" },
-]
+authors = [{ name = "Nicolas Granger", email = "nicolas.granger.m@gmail.com" }]
 description = "A library for transparent transformation of indexable containers (lists, etc.)"
 readme = "README.rst"
 requires-python = ">=3.8"
-keywords = ['mapping', 'lazy', 'delayed', 'pipeline', 'processing']
+keywords = ["mapping", "lazy", "delayed", "pipeline", "processing"]
 license = { text = "Mozilla Public License 2.0 (MPL 2.0)" }
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -26,9 +24,18 @@ dynamic = ["version"]
 dependencies = ["tblib"]
 
 [project.optional-dependencies]
-'documentation'= ['sphinx', 'ipython', 'ipykernel', 'nbconvert', 'nbsphinx', 'Pillow', 'numpy','scikit-learn']
-'tests'= ['pytest', 'pytest-timeout', 'numpy', 'pytest-coverage', 'nose']
-# 'importlib-metadata; python_version<"3.8"',
+tests = ["pytest", "pytest-timeout", "numpy", "pytest-coverage"]
+documentation = [
+    "sphinx",
+    "furo",
+    "ipython",
+    "ipykernel",
+    "nbconvert",
+    "nbsphinx",
+    "Pillow",
+    "numpy",
+    "scikit-learn",
+]
 
 [project.urls]
 PyPi = "https://pypi.org/project/SeqTools"
@@ -36,7 +43,7 @@ Documentation = "http://seqtools-doc.readthedocs.io"
 Repository = "https://github.com/nlgranger/SeqTools"
 
 [tool.coverage.run]
-source = [ "seqtools" ]
+source = ["seqtools"]
 parallel = true
 concurrency = ["thread", "multiprocessing"]
 
@@ -46,8 +53,5 @@ exclude_lines = [
     "raise ValueError",
     "raise TypeError",
     "@abstract",
-    "logger.warning"
+    "logger.warning",
 ]
-
-[tool.isort]
-profile = "black"
