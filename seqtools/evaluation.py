@@ -107,12 +107,14 @@ class ProcessBacked(AsyncWorker):
         )
 
     @staticmethod
-    def cleanup(job_queue, workers, monitor):
+    def cleanup(job_queue, workers: list[multiprocessing.Process], monitor):
         for _ in workers:
             job_queue.put((-1, -1))
         for w in workers:
             if w.is_alive():
-                w.join()
+                w.join(1)
+                if w.is_alive():
+                    w.kill()
         monitor.join()
 
     @staticmethod
