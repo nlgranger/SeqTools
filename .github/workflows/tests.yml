@@ -1,5 +1,5 @@
 name: Tests
-run-name: "run ${{github.run_attempt}}"
+run-name: "run ${{ github.ref_name }} ${{github.run_attempt}}"
 on: [push]
 jobs:
   # check-formatting:
@@ -50,6 +50,8 @@ jobs:
     needs: unit-tests
 
     steps:
+      - uses: actions/checkout@v3
+      
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
