@@ -65,12 +65,9 @@ jobs:
         with:
           name: coverage-report
 
-      - name: find
-        run: find
-
       - name: Combine coverage files
         run: |
-          coverage combine coverage-report
+          coverage combine
           coverage xml
 
       - name: Upload coverage report to codecov
