@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10"]
 
     steps:
       - uses: actions/checkout@v3
@@ -34,14 +34,49 @@ jobs:
           pip install -e .[tests]
 
       - name: Pytest
-        run: pytest --cov=seqtools tests
+        run: pytest --cov=seqtools --cov-report= tests
       
-      - name: Coverage
+      - name: Rename coverage file
+        run: mv .coverage .coverage.${{ matrix.python-version }}
+
+      - name: Store coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: .coverage.${{ matrix.python-version }}
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
         run: |
-          coverage report --fail-under=90
+          python -m pip install --upgrade pip
+          pip install coverage
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@v3        
+        with:
+          name: coverage-report
+
+      - name: ls
+        run: ls -R
+
+      - name: Combine coverage files
+        run: |
+          coverage combine coverage-report
           coverage xml
 
-      - name: Upload coverage report
+      - name: Upload coverage report to codecov
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Check coverage
+        run: coverage report --fail-under=90
