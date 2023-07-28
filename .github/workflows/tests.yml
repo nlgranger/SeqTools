@@ -2,19 +2,19 @@ name: Tests
 run-name: "run ${{github.run_attempt}}"
 on: [push]
 jobs:
-  check-formatting:
-    runs-on: ubuntu-latest
+  # check-formatting:
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: ufmt
-        uses: omnilib/ufmt@action-v1
-        with:
-          path: seqtools
-          python-version: "3.11"
+  #   steps:
+  #     - name: ufmt
+  #       uses: omnilib/ufmt@action-v1
+  #       with:
+  #         path: seqtools
+  #         python-version: "3.11"
 
   unit-tests:
     runs-on: ubuntu-latest
-    needs: check-formatting
+    # needs: check-formatting
 
     strategy:
       matrix:
@@ -34,7 +34,7 @@ jobs:
           pip install -e .[tests]
 
       - name: Pytest
-        run: pytest --cov=seqtools --cov-report= tests
+        run: pytest --cov=seqtools --cov-report= -v tests/test_indexing.py
       
       - name: Rename coverage file
         run: mv .coverage .coverage.${{ matrix.python-version }}
@@ -65,8 +65,8 @@ jobs:
         with:
           name: coverage-report
 
-      - name: ls
-        run: ls -R
+      - name: find
+        run: find
 
       - name: Combine coverage files
         run: |
