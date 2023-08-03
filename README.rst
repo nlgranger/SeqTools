@@ -31,7 +31,7 @@ Successively map three functions on a list of values:
 >>> def f1(x):
 ...     return x + 1
 ...
->>> def f2(x):                    # slow transformation
+>>> def f2(x):                     # slow transformation
 ...     time.sleep(.01)
 ...     return [x for _ in range(500)]
 ...
@@ -40,11 +40,11 @@ Successively map three functions on a list of values:
 ...
 >>> data = list(range(1000))
 >>> tmp1 = [f1(x) for x in data]
->>> tmp2 = [f2(x) for x in tmp1]  # takes 10+ seconds
+>>> tmp2 = [f2(x) for x in tmp1]   # takes 10+ seconds
 >>> res = [f3(x) for x in tmp2]
 >>> print(res[2])
 3.0
->>> max(tmp2[2])                  # check intermediate value
+>>> max(tmp2[2])                   # check intermediate value
 3
 
 With seqtools:
@@ -63,27 +63,27 @@ Batteries included!
 
 The library comes with a set of functions to manipulate sequences:
 
-.. |concatenate| image:: docs/_static/concatenate.png
+.. |concatenate| image:: docs/_static/concatenate.svg
 
 .. _concatenation: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.concatenate
 
-.. |batch| image:: docs/_static/batch.png
+.. |batch| image:: docs/_static/batch.svg
 
 .. _batching: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.batch
 
-.. |gather| image:: docs/_static/gather.png
+.. |gather| image:: docs/_static/gather.svg
 
 .. _reindexing: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.gather
 
-.. |prefetch| image:: docs/_static/prefetch.png
+.. |prefetch| image:: docs/_static/prefetch.svg
 
 .. _prefetching: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.prefetch
 
-.. |interleaving| image:: docs/_static/interleaving.png
+.. |interleaving| image:: docs/_static/interleave.svg
 
 .. _interleaving: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.interleave
 
-.. |uniter| image:: docs/_static/uniter.png
+.. |uniter| image:: docs/_static/uniter.svg
 
 .. _uniter: https://seqtools-doc.readthedocs.io/en/latest/reference.html#seqtools.uniter
 
@@ -125,7 +125,7 @@ many optimization settings to optimize pipelined transformations. This library
 notably provides advanced caching mechanisms which are not the primary concern
 of SeqTool. SeqTool uses a simpler container-oriented interface with multiple
 utility functions in order to assist fast prototyping. On-demand evaluation is
-its default behaviour and applies at all layers of a transformation pipeline. 
+its default behaviour and applies at all layers of a transformation pipeline.
 Eager evaluation of elements in SeqTools does not break the list-like interface
 and can be used in the middle of a transformation pipeline.
 
