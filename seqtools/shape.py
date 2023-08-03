@@ -39,9 +39,8 @@ def collate(sequences):
 
     The n'th element is a tuple of the n'th elements from each sequence.
 
-    .. image:: _static/collate.png
+    .. image:: _static/collate.svg
        :alt: collate
-       :width: 50%
        :align: center
 
     Example:
@@ -93,9 +92,8 @@ class Concatenation(object):
 def concatenate(sequences):
     """Return a view on the concatenated sequences.
 
-    .. image:: _static/concatenate.png
+    .. image:: _static/concatenate.svg
        :alt: concatenate
-       :width: 25%
        :align: center
 
     Example:
@@ -180,10 +178,9 @@ class BatchView(object):
 def batch(sequence, k, drop_last=False, pad=None, collate_fn=None):
     """Return a view of a sequence in groups of k items.
 
-    .. image:: _static/batch.png
-        :alt: batch
-        :width: 25%
-        :align: center
+    .. image:: _static/batch.svg
+       :alt: batch
+       :align: center
 
     Args:
         sequence (Sequence):
@@ -314,13 +311,17 @@ class Split(object):
 def split(sequence, edges):
     """Split a sequence into a succession of subsequences.
 
+    .. image:: _static/split.svg
+       :alt: split
+       :align: center
+
     Args:
         sequence (Sequence):
             Input sequence.
         edges (Sequence[int] or int or Sequence[Tuple[int, int]]):
             `edges` specifies how to split the sequence
 
-            - A 1D array that contains the indexes where the sequence
+            - A 1D arra    y that contains the indexes where the sequence
               should be cut, the beginning and the end of the sequence
               are implicit.
             - An int specifies how many cuts of equal size should be

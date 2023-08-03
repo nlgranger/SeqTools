@@ -417,9 +417,8 @@ def prefetch(
     ideally placed at the end of a transformation pipeline when all
     items are to be evaluated in succession.
 
-    .. image:: _static/prefetch.png
+    .. image:: _static/prefetch.svg
        :alt: gather
-       :width: 30%
        :align: center
 
     Args:

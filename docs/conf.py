@@ -54,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'SeqTools'
-copyright = '2017-2018, Nicolas Granger'
+copyright = '2017-2023, Nicolas Granger'
 author = 'Nicolas Granger'
 
 # The version info for the project you're documenting, acts as replacement for

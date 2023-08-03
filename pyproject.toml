@@ -34,7 +34,6 @@ documentation = [
     "nbsphinx",
     "Pillow",
     "numpy",
-    "scikit-learn",
 ]
 
 [project.urls]

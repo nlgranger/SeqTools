@@ -11,7 +11,7 @@ class Mapping(object):
 
         self.sequences = sequences
         self.f = f
-        self.stack = format_stack(2)
+        self.stack = format_stack(3)
 
     def __len__(self):
         return len(self.sequences[0])
@@ -56,9 +56,8 @@ def smap(f, *sequences):
     items will be passed as distinct arguments to f:
     :code:`[f(*x) for x in zip(*sequences)]`
 
-    .. image:: _static/smap.png
+    .. image:: _static/smap.svg
        :alt: smap
-       :width: 20%
        :align: center
 
     Example:

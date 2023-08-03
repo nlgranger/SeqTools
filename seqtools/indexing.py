@@ -126,9 +126,8 @@ class Gathering:
 def gather(sequence, indexes):
     """Return a view on the sequence reordered by indexes.
 
-    .. image:: _static/gather.png
+    .. image:: _static/gather.svg
        :alt: gather
-       :width: 15%
        :align: center
 
     Example:
@@ -218,14 +217,13 @@ class InfiniteCycle:
 def cycle(sequence, limit=None):
     """Return repeated view of a sequence.
 
+    .. image:: _static/cycle.svg
+       :alt: collate
+       :align: center
+
     Args:
         sequence (Sequence): The sequence to be repeated.
         limit (Optional[int]): An optional size limit.
-
-    .. image:: _static/cycle.png
-       :alt: collate
-       :width: 10%
-       :align: center
 
     Example:
 
@@ -315,9 +313,8 @@ def interleave(*sequences):
     Sequences don't need to have the same length, the cycling will
     operate between whatever sequences are left.
 
-    .. image:: _static/interleaving.png
+    .. image:: _static/interleave.svg
        :alt: interleaving
-       :width: 30%
        :align: center
 
     Example:
@@ -448,11 +445,6 @@ def repeat(value, times=None):
         value (Any): Value to be (virtually) replicated.
         times (Optional[int]): Optional size limit.
 
-    .. image:: _static/repeat.png
-       :alt: repeat
-       :width: 10%
-       :align: center
-
     Example:
 
         >>> item = 3
@@ -470,6 +462,10 @@ def repeat(value, times=None):
 
 def switch(condition, x, y):
     """Combine the values of two sequences based on condition.
+
+    .. image:: _static/switch.svg
+        :alt: switch
+        :align: center
 
     Args:
         condition (Sequence[bool]): a sequence of booleans
@@ -606,9 +602,8 @@ def uniter(iterable, cache_size=0, n_parallel=1, size=None):
             optional value to set `len`, otherwise `len` will raise
             `NotImplementedError`.
 
-    .. image:: _static/uniter.png
+    .. image:: _static/uniter.svg
        :alt: uniter
-       :width: 15%
        :align: center
 
     This works by starting, incrementing and restarting one or several iterators

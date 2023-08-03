@@ -63,7 +63,7 @@ def unindent(lines):
 
 def format_stack(skip=1):
     out = ""
-    for frame in inspect.stack()[:skip:-1]:
+    for frame in inspect.stack()[skip:][::-1]:
         _, filename, lineno, function, code_context, _ = frame
         out += '  File "{}", line {}, in {}\n'.format(filename, lineno, function)
         for line in unindent(code_context):

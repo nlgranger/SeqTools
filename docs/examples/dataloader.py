@@ -3,7 +3,6 @@
 import copyreg
 import numbers
 
-import numpy as np
 import torch
 
 import seqtools
@@ -36,34 +35,33 @@ def default_collate_fn(values):
 
     if isinstance(sample, torch.Tensor):
         return torch.stack(values)
-    elif isinstance(sample, np.ndarray):
-        return np.stack(values)
     elif isinstance(sample, numbers.Integral):
         return torch.tensor(values)
     elif isinstance(sample, (tuple, list)):
         return sample.__class__(default_collate_fn(row) for row in zip(*values))
     elif isinstance(sample, dict):
         return sample.__class__(
-            (k, default_collate_fn([v[k] for v in values]))
-            for k in sample.keys())
+            (k, default_collate_fn([v[k] for v in values])) for k in sample.keys()
+        )
 
 
 class DataLoader:
     def __init__(
-            self,
-            dataset,
-            batch_size=1,
-            shuffle=False,
-            sampler=None,
-            batch_sampler=None,
-            num_workers=0,
-            collate_fn=None,
-            pin_memory=False,
-            drop_last=False,
-            worker_init_fn=None,
-            prefetch_factor=2,
-            shm_size=0):
-        """Re-implementation of pytorch Dataloader using seqtools.
+        self,
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        sampler=None,
+        batch_sampler=None,
+        num_workers=0,
+        collate_fn=None,
+        pin_memory=False,
+        drop_last=False,
+        worker_init_fn=None,
+        prefetch_factor=2,
+        shm_size=0,
+    ):
+        """Re-implementation of pytorch DataLoader using seqtools.
 
         Notable differences:
 
@@ -93,6 +91,7 @@ class DataLoader:
     def __len__(self):
         if self.batch_sampler:
             return len(self.batch_sampler)
+
         dataset_size = len(self.sampler) if self.sampler else len(self.dataset)
         if self.batch_size and self.drop_last and dataset_size % self.batch_size > 0:
             return dataset_size // self.batch_size
@@ -100,7 +99,7 @@ class DataLoader:
             return dataset_size // self.batch_size + 1
 
     def make_sequence(self):
-        """Build a sequence that looks like a dataloader when iterated over."""
+        """Build a sequence that looks like a DataLoader when iterated over."""
         # shuffling
         if self.batch_sampler:
             batch_indices = list(self.batch_sampler)
@@ -118,8 +117,10 @@ class DataLoader:
         if not self.batch_sampler and self.batch_size is not None:
             out = seqtools.batch(
                 out,
-                k=self.batch_size, drop_last=self.drop_last,
-                collate_fn=self.collate_fn)
+                k=self.batch_size,
+                drop_last=self.drop_last,
+                collate_fn=self.collate_fn,
+            )
         elif self.batch_sampler:
             out = seqtools.smap(self.collate_fn, out)
 
@@ -129,15 +130,17 @@ class DataLoader:
                 out,
                 max_buffered=self.num_workers * self.prefetch_factor,
                 nworkers=self.num_workers,
-                method='process',
+                method="process",
                 start_hook=self.worker_init_fn,
-                shm_size=self.shm_size)
+                shm_size=self.shm_size,
+            )
 
         # pin memory
         if self.pin_memory:
             out = seqtools.smap(pin_tensors_memory, out)
-            out = seqtools.prefetch(
-                out, nworkers=1, method='thread', max_buffered=1)
+            out = seqtools.prefetch(  # execute in background thread
+                out, nworkers=1, method="thread", max_buffered=1
+            )
 
         return out
 
