@@ -119,6 +119,10 @@ html_show_sourcelink = False
 
 doctest_global_setup = '''
 import seqtools
+try:
+    import torch
+except ImportError:
+    torch = None
 '''
 
 

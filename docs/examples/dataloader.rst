@@ -14,21 +14,19 @@ handles a custom iterator-based index order.
 This would actually be fairly easy since the whole multi-process computation lies in a
 separate class and can be reused.
 
-.. literalinclude:: DataLoader.py
+.. literalinclude:: dataloader.py
 
 Sample usage:
 
 .. testsetup::
+   :skipif: torch is None
 
    import sys
    sys.path.append("docs/examples")
-   try:
-       from dataloader import DataLoader
-   except ImportError:
-       DataLoader = None
+   from dataloader import DataLoader
 
 .. testcode::
-   :skipif: DataLoader is None
+   :skipif: torch is None
 
    import torch
    from torchvision.datasets import FakeData
