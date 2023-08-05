@@ -41,6 +41,11 @@ PyPi = "https://pypi.org/project/SeqTools"
 Documentation = "http://seqtools-doc.readthedocs.io"
 Repository = "https://github.com/nlgranger/SeqTools"
 
+[tool.setuptools.packages.find]
+include = ["seqtools*"]
+
+[tool.setuptools_scm]
+
 [tool.coverage.run]
 source = ["seqtools"]
 parallel = true
@@ -54,3 +59,8 @@ exclude_lines = [
     "@abstract",
     "logger.warning",
 ]
+
+[tool.cibuildwheel]
+build = "*"
+skip = ["*musllinux*", "cp38-*", "pp*"]
+archs = ["native"]

@@ -1,6 +1,6 @@
 name: Tests
 run-name: "${{ github.event.head_commit.message }}"
-on: [push]
+on: [push, pull_request]
 jobs:
   check-formatting:
     runs-on: ubuntu-latest

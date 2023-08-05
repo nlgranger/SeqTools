@@ -11,6 +11,8 @@ SeqTools
    tutorial
    reference
    examples
+   PyPi <https://pypi.org/project/SeqTools>
+   Repository <https://github.com/nlgranger/SeqTools>
 
 
 .. testsetup::
