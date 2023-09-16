@@ -2,6 +2,7 @@
 
 import copyreg
 import numbers
+from functools import partial
 
 import torch
 
@@ -10,10 +11,13 @@ import seqtools
 
 # overload torch.Tensor pickling to benefit from zero copy on buffer
 def pickle_tensor(t: torch.Tensor):
-    return torch.from_numpy, (t.numpy(),)
+    return torch.from_numpy, (t.contiguous().numpy(),)
 
 
-copyreg.pickle(torch.Tensor, pickle_tensor)
+def worker_init_fn_wrapper(user_fn, *kargs, **kwargs):
+    copyreg.pickle(torch.Tensor, pickle_tensor)
+    if user_fn is not None:
+        user_fn(*kargs, **kwargs)
 
 
 def pin_tensors_memory(value):
@@ -43,6 +47,10 @@ def default_collate_fn(values):
         return sample.__class__(
             (k, default_collate_fn([v[k] for v in values])) for k in sample.keys()
         )
+
+
+def gather_items(a, items):
+    return [a[i] for i in items]
 
 
 class DataLoader:
@@ -84,7 +92,7 @@ class DataLoader:
         self.collate_fn = collate_fn or default_collate_fn
         self.pin_memory = pin_memory
         self.drop_last = drop_last
-        self.worker_init_fn = worker_init_fn
+        self.worker_init_fn = partial(worker_init_fn_wrapper, worker_init_fn)
         self.prefetch_factor = prefetch_factor
         self.shm_size = shm_size
 
@@ -103,7 +111,7 @@ class DataLoader:
         # shuffling
         if self.batch_sampler:
             batch_indices = list(self.batch_sampler)
-            out = seqtools.smap(lambda bi: [self.dataset[i] for i in bi], batch_indices)
+            out = seqtools.smap(partial(gather_items, self.dataset), batch_indices)
         elif self.sampler:
             shuffle_indices = list(self.sampler)
             out = seqtools.gather(self.dataset, shuffle_indices)
@@ -128,7 +136,7 @@ class DataLoader:
         if self.num_workers > 0:
             out = seqtools.prefetch(
                 out,
-                max_buffered=self.num_workers * self.prefetch_factor,
+                max_buffered=max(4, self.num_workers * self.prefetch_factor),
                 nworkers=self.num_workers,
                 method="process",
                 start_hook=self.worker_init_fn,

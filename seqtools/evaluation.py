@@ -23,7 +23,6 @@ from .utils import get_logger
 pickling_support.install()
 
 logger = get_logger(__name__)
-mp_ctx = multiprocessing.get_context()
 
 
 # Asynchronous item fetching backends -----------------------------------------
@@ -64,6 +63,7 @@ class ProcessBacked(AsyncWorker):
             self.free_shm_slots = set()
 
         # initialize workers
+        mp_ctx = multiprocessing.get_context(method="spawn")  # spawn is OpenMP-friendly
         self.job_queue = mp_ctx.Queue()
         self.result_pipes = []
 
