@@ -90,7 +90,7 @@ def compare_random_objects(a, b):
 @pytest.mark.parametrize("prefetch_kwargs", prefetch_kwargs_set)
 def test_prefetch_random_objects(prefetch_kwargs):
     seq = [build_random_object() for _ in range(1000)]
-    y = prefetch(seq, -1, **prefetch_kwargs)
+    y = prefetch(seq, -1, max_buffered=len(os.sched_getaffinity(0)), **prefetch_kwargs)
 
     assert len(seq) == len(y)
 

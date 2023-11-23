@@ -44,7 +44,7 @@ class ProcessBacked(AsyncWorker):
 
     def __init__(self, seq, num_workers=0, buffer_size=10, init_fn=None, shm_size=0):
         if num_workers <= 0:
-            num_workers = multiprocessing.cpu_count() - num_workers
+            num_workers = len(os.sched_getaffinity(0)) + num_workers
         if num_workers <= 0:
             raise ValueError("at least one worker required")
         if buffer_size < num_workers:
@@ -275,7 +275,7 @@ class ThreadBackend(AsyncWorker):
 
     def __init__(self, seq, num_workers=0, init_fn=None):
         if num_workers <= 0:
-            num_workers = multiprocessing.cpu_count() - num_workers
+            num_workers = len(os.sched_getaffinity(0)) + num_workers
         if num_workers <= 0:
             raise ValueError("at least one worker required")
 
