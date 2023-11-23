@@ -1,5 +1,4 @@
 import functools
-import io
 import itertools
 import multiprocessing
 import os
@@ -13,6 +12,8 @@ import time
 import weakref
 from abc import ABC, abstractmethod
 from multiprocessing import sharedctypes
+
+import threadpoolctl
 
 from tblib import pickling_support
 
@@ -63,7 +64,7 @@ class ProcessBacked(AsyncWorker):
             self.free_shm_slots = set()
 
         # initialize workers
-        mp_ctx = multiprocessing.get_context(method="spawn")  # spawn is OpenMP-friendly
+        mp_ctx = multiprocessing.get_context()
         self.job_queue = mp_ctx.Queue()
         self.result_pipes = []
 
@@ -85,7 +86,8 @@ class ProcessBacked(AsyncWorker):
                 daemon=True,
             )
             old_sig_hdl = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            worker.start()
+            with threadpoolctl.threadpool_limits(limits=1):
+                worker.start()
             signal.signal(signal.SIGINT, old_sig_hdl)
             tx.close()
 
