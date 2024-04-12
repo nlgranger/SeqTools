@@ -109,7 +109,7 @@ class ProcessBacked(AsyncWorker):
         )
 
     @staticmethod
-    def cleanup(job_queue, workers: list[multiprocessing.Process], monitor):
+    def cleanup(job_queue, workers, monitor):
         for _ in workers:
             job_queue.put((-1, -1))
         for w in workers:
@@ -235,21 +235,24 @@ class ProcessBacked(AsyncWorker):
             # serialize it
             try:
                 if shm_slot_start is None:
-                    payload = pkl.dumps(value, protocol=-1)
+                    payload = pkl.dumps(value, protocol=pkl.HIGHEST_PROTOCOL)
                 else:
                     buffers_limits.clear()
                     shm_offset = shm_slot_start
                     shm_slot_stop = shm_slot_start + shm_slot_size
                     payload = pkl.dumps(
-                        value, protocol=-1, buffer_callback=buffer_callback
+                        value,
+                        protocol=pkl.HIGHEST_PROTOCOL,
+                        buffer_callback=buffer_callback,
                     )
 
             except Exception as e:  # gracefully recover failed serialization
                 if success:
                     success = False
-                    msg = "failed to send item {} to parent process, ".format(
-                        idx
-                    ) + "is it picklable? Error message was:\n{}".format(e)
+                    msg = (
+                        f"failed to send item {idx} to parent process, "
+                        + "is it picklable? Error message was:\n{e}"
+                    )
                     payload = pkl.dumps(ValueError(msg))
                 else:  # serialize error message because error can't be pickled
                     payload = pkl.dumps(str(value))

@@ -10,7 +10,7 @@ jobs:
         uses: omnilib/ufmt@action-v1
         with:
           path: seqtools
-          python-version: "3.11"
+          python-version: "3.10"
 
   unit-tests:
     runs-on: ubuntu-latest
