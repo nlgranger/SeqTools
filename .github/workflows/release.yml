@@ -9,44 +9,47 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
+        os: [ubuntu-22.04, windows-2022, macos-13, macos-14]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.14.1
+        uses: pypa/cibuildwheel@v2.17.0
 
       - name: Store wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: dist
-          path: wheelhouse/*.whl
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+          overwrite: true
 
   build-sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: wheels-sdist
           path: dist/*.tar.gz
+          overwrite: true
 
   upload-pypi:
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download dist
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: dist
+          pattern: wheels-*
           path: dist
+          merge-multiple: true
 
       - name: Store whether the current ref is on main
         id: check-ref-on-main
